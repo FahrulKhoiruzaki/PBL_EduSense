@@ -1,4 +1,4 @@
-name: edu_sense
+name: aplikasi_guru
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -34,6 +34,12 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  flutter_riverpod: ^3.4.3
+  google_fonts: ^9.0.0
+  dio: ^5.8.0
+  camera: ^0.12.1
+  url_launcher: ^6.3.3
+  image_picker: ^1.2.4
 
 dev_dependencies:
   flutter_test:
