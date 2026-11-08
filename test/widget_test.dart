@@ -1,30 +1,60 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+import 'package:edu_sense/features/guru/screens/login_screen.dart';
+import 'package:edu_sense/main.dart';
+import 'package:edu_sense/models/app_models.dart';
+import 'package:edu_sense/repositories/auth_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:edu_sense/main.dart';
+import 'support/test_env.dart';
+
+/// Tanpa sesi tersimpan: `restore()` mengembalikan null, sehingga aplikasi
+/// tidak pernah memanggil backend dan langsung menampilkan layar login.
+class _SignedOutAuthRepository implements AuthRepository {
+  var restoreCalls = 0;
+
+  @override
+  Future<AuthSession?> restore() async {
+    restoreCalls++;
+    return null;
+  }
+
+  @override
+  Future<AuthSession> login({
+    required String email,
+    required String password,
+  }) => throw UnimplementedError('Login tidak dipakai di smoke test ini.');
+
+  @override
+  Future<void> changePassword({required String newPassword}) =>
+      throw UnimplementedError(
+        'Ganti password tidak dipakai di smoke test ini.',
+      );
+
+  @override
+  Future<void> logout() async {}
+}
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  final errors = captureErrors();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('app boots to the login screen when no session is stored', (
+    tester,
+  ) async {
+    await prepareFonts();
+    final auth = _SignedOutAuthRepository();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [authRepositoryProvider.overrideWithValue(auth)],
+        child: const AplikasiGuruApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(auth.restoreCalls, 1);
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(errors, isEmpty);
   });
 }
