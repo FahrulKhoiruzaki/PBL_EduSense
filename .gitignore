@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Folder kerja Fanani (jangan di-push)
+/Fanani/

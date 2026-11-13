@@ -1,4 +1,4 @@
-import 'package:aplikasi_guru/core/network/media_url.dart';
+import 'package:edu_sense/core/network/media_url.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -15,7 +15,10 @@ analyzer:
     - android/**
     - ios/**
     - web/**
+    - windows/**
     - macos/**
+    - linux/**
+    - Fanani/**
 
 linter:
   # The lint rules applied to this project can be customized in the
