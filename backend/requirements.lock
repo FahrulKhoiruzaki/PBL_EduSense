@@ -1,0 +1,15 @@
+argon2-cffi==25.1.0
+fastapi==0.162.0
+httpx==0.28.1
+psycopg==3.3.6
+psycopg-binary==3.3.6
+pydantic==2.14.1
+pydantic-settings==2.16.1
+pydantic_core==2.50.1
+PyJWT==2.15.1
+pytest==9.1.1
+python-multipart==0.0.32
+SQLAlchemy==2.1.6
+starlette==1.10.0
+tzdata==2026.5
+uvicorn==0.54.0
