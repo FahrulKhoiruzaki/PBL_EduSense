@@ -288,7 +288,7 @@ class WebChipBar<T> extends StatelessWidget {
         children: [
           for (final (value, label) in options)
             Material(
-              color: selected == value ? c.ink : c.mi,
+              color: selected == value ? c.primary : c.mi,
               borderRadius: BorderRadius.circular(99),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
@@ -303,7 +303,7 @@ class WebChipBar<T> extends StatelessWidget {
                         label,
                         style: context.styleBody.copyWith(
                           fontSize: 16,
-                          color: selected == value ? c.su : c.ink,
+                          color: selected == value ? c.onPrimary : c.ink,
                         ),
                       ),
                     ),

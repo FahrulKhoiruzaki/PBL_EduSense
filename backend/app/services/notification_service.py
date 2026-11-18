@@ -55,15 +55,17 @@ def notify_parents_of_attendance(db: Session, entries: list[tuple[int, StatusAbs
 
 
 def notify_parent_of_grade(
-    db: Session, siswa: Siswa, kategori: KategoriNilai, nilai_id: int
+    db: Session, siswa: Siswa, subject: KategoriNilai | str, nilai_id: int
 ) -> None:
+    """`subject`: nama mata pelajaran (nilai berbasis komponen) atau kategori (perilaku lama)."""
+    label = subject.value if isinstance(subject, KategoriNilai) else subject
     user_id = db.scalar(select(OrangTua.user_id).where(OrangTua.id == siswa.orang_tua_id))
     if user_id is None:
         return
     db.add(
         Notifikasi(
             user_id=user_id,
-            judul=f"Nilai {kategori.value} baru untuk {_first_name(siswa.nama)}.",
+            judul=f"Nilai {label} baru untuk {_first_name(siswa.nama)}.",
             target="nilai",
             target_id=nilai_id,
         )

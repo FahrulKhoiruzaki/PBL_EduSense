@@ -39,8 +39,30 @@ Akun demo (seeder):
 
 Data demo: 3 kelas (5A, 5B, 6A kosong), 8 siswa dengan 28 hari absensi dan 6 nilai per kategori,
 notifikasi, log aktivitas, dan konten website (berita, pengumuman, kegiatan, fasilitas, FAQ, teks
-halaman). Absensi **hari ini sengaja kosong** supaya alur absen bisa dicoba. Klasifikasi siswa
-(Mahir/Cukup/Perlu Pendampingan) diisi langsung oleh seeder; belum ada perhitungan otomatis.
+halaman). Absensi **hari ini sengaja kosong** supaya alur absen bisa dicoba.
+
+Data akademik demo (periode, mapel termasuk contoh muatan lokal Bahasa Jawa, kelas 1-6, komponen
+penilaian, nilai, absensi, aturan klasifikasi CONTOH) diisi `python -m scripts.seed_akademik`
+(juga dipanggil oleh seeder utama). Idempoten dan tidak menghapus apa pun; menolak berjalan bila
+`ENVIRONMENT=production`. Ambang klasifikasi dan bobot di seeder hanya contoh demo, bukan ketetapan
+sekolah. Klasifikasi dihitung otomatis dari nilai (lihat `app/services/grading_service.py`) setelah
+admin menetapkan aturan periode.
+
+#### Backfill periode untuk nilai lama (database yang sudah berisi sebelum migrasi 005)
+
+Nilai lama belum punya `periode_id`. Setelah admin membuat periode akademik yang sesuai:
+
+```bash
+python -m scripts.backfill_periode_nilai                      # DRY-RUN (bawaan): hanya laporan
+python -m scripts.backfill_periode_nilai --report backfill.csv  # + laporan per baris (CSV)
+python -m scripts.backfill_periode_nilai --apply              # terapkan; minta ketik "ya"
+```
+
+Nilai hanya dipetakan bila tanggalnya berada di dalam rentang tepat satu periode; tanggal yang
+tidak tercakup dilaporkan "tidak dapat dipetakan" dan dibiarkan kosong (tidak ditebak). Mapel nilai
+lama tidak diisi. `updated_at` nilai dipertahankan; klasifikasi periode aktif dihitung ulang
+(periode lama hanya dengan `--hitung-ulang-periode-lama`). Satu transaksi: gagal = tidak ada yang
+berubah. Backup database dulu sebelum `--apply` di data produksi.
 
 Admin pertama untuk database produksi (tanpa seeder):
 `python -m scripts.create_user --role admin --email admin@sekolah.id --nama "Admin Sekolah"`.
@@ -106,8 +128,10 @@ app/
   api/deps.py        autentikasi dan otorisasi peran
   api/routers/       auth, public, guru, guru_face, ortu, admin, admin_cms
 db/schema.sql        salinan ../aplikasi_guru/database/schema.sql
-db/migrations/       tambahan khusus backend (jalankan setelah schema.sql): 001 tambahan, 002 teks awal
-scripts/             init_db, create_user, seed
+db/migrations/       tambahan khusus backend (jalankan setelah schema.sql): 001 tambahan, 002 teks awal,
+                     003 info kelas & kalender, 004 foto sekolah, 005 periode akademik, mapel,
+                     komponen penilaian, klasifikasi per periode
+scripts/             init_db, create_user, seed, seed_akademik, backfill_periode_nilai
 ```
 
 `db/schema.sql` adalah salinan; bila `aplikasi_guru/database/schema.sql` berubah, salin ulang.
@@ -163,8 +187,8 @@ ditambahkan, absensi berubah status, scan wajah mencatat hadir, atau absensi dis
 | POST | `/admin/siswa/move` | `{siswa_ids, kelas_tujuan}`; nilai dan absensi ikut pindah |
 | GET/POST/DELETE | `/admin/classes`, `/admin/classes/{kode}` | hapus hanya bila kelas kosong |
 | PUT | `/admin/classes/{kode}/wali` | `{guru_id}`; kosong/null melepas wali |
-| POST/DELETE | `/admin/classes/{kode}/mapel`, `.../mapel/{guru_id}` | penugasan guru mapel |
-| GET/PUT | `/admin/settings` | `tahun_ajaran` (`2026/2027`), `batas_jam_terlambat` (`HH:MM` atau null) |
+| POST/DELETE | `/admin/classes/{kode}/mapel`, `.../mapel/{guru_id}?mapel_id=` | penugasan `{guru_id, mapel_id}`; tanpa `mapel_id` = penugasan lama (absensi saja, belum boleh input nilai) |
+| GET/PUT | `/admin/settings` | `tahun_ajaran` mengikuti periode aktif (bila ada), `batas_jam_terlambat` (`HH:MM` atau null) |
 | GET | `/admin/logs?limit=` | log aktivitas, terbaru dulu (1-1000, bawaan 100) |
 
 - Menambah siswa otomatis membuat akun orang tua dengan email
@@ -177,6 +201,28 @@ ditambahkan, absensi berubah status, scan wajah mencatat hadir, atau absensi dis
 - Menghapus siswa juga menghapus akun orang tuanya bila tidak punya anak lain. Menghapus guru
   melepas semua penugasannya; nilai dan absensi yang pernah ia catat tetap ada.
 - Setiap perubahan oleh admin masuk ke log aktivitas dalam transaksi yang sama.
+
+### Akademik (`/admin/academic/*`, khusus admin)
+
+| Metode | Path | Keterangan |
+|---|---|---|
+| GET/POST | `/admin/academic/periods` | periode = satu semester satu tahun ajaran; rentang tidak boleh tumpang tindih |
+| PUT/DELETE | `/admin/academic/periods/{id}` | hapus hanya bila belum ada nilai/komponen/hasil klasifikasi dan tidak aktif |
+| POST | `/admin/academic/periods/{id}/activate` | satu periode aktif; data periode lain tidak berubah |
+| GET/PUT | `/admin/academic/periods/{id}/rule` | aturan klasifikasi `{metode: rata_rata/terendah, batas_mahir, batas_cukup}`; PUT menghitung ulang |
+| POST | `/admin/academic/periods/{id}/recompute` | hitung ulang klasifikasi periode |
+| GET/POST/PUT/DELETE | `/admin/academic/subjects[/{id}]` | mapel `{kode, nama, jenis: umum/muatan_lokal, tingkat, deskripsi}`; yang sudah dipakai hanya bisa dinonaktifkan |
+| PUT | `/admin/academic/subjects/{id}/active` | `{aktif}` |
+| GET | `/admin/academic/components?periode_id=&mapel_id=` | komponen penilaian per periode |
+| POST/PUT/DELETE | `/admin/academic/components[/{id}]` | `{periode_id, mapel_id, nama, kategori, bobot, deskripsi}`; total bobot aktif per mapel maks 100 |
+| PUT | `/admin/academic/components/{id}/active` | nonaktif = tidak bisa diisi nilai baru; nilai lama tetap dihitung |
+| POST | `/admin/academic/components/copy` | `{dari_periode_id, ke_periode_id}` |
+| GET | `/admin/academic/classification?periode_id=&kelas=` | distribusi Mahir/Cukup/Perlu Pendampingan (jumlah + persen), per kelas, perbandingan periode sebelumnya |
+
+Guru: `GET /guru/periods`, `GET /guru/classes/{kode}?periode_id=`, `GET /guru/classes/{kode}/subjects`,
+`GET /guru/classes/{kode}/recap?mapel_id=`, `GET /guru/classes/{kode}/classification`. Input nilai
+(`POST /guru/classes/{kode}/grades`, `PUT /guru/grades/{id}`) memakai `komponen_id` (bukan
+`kategori`); hanya guru yang ditugaskan mengajar mapel komponen itu di kelas itu.
 
 ### Kelola Website (`/admin/cms/*`, khusus admin)
 

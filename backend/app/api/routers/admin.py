@@ -238,15 +238,19 @@ def set_wali(
 def add_mapel(
     kode: str, body: MapelIn, admin: Admin = Depends(get_current_admin), db: Session = Depends(get_db)
 ) -> Response:
-    admin_service.add_mapel(db, admin.user, kode, body.guru_id)
+    admin_service.add_mapel(db, admin.user, kode, body.guru_id, body.mapel_id)
     return _no_content()
 
 
 @router.delete("/classes/{kode}/mapel/{guru_id}", status_code=204)
 def remove_mapel(
-    kode: str, guru_id: int, admin: Admin = Depends(get_current_admin), db: Session = Depends(get_db)
+    kode: str,
+    guru_id: int,
+    mapel_id: int | None = Query(default=None),
+    admin: Admin = Depends(get_current_admin),
+    db: Session = Depends(get_db),
 ) -> Response:
-    admin_service.remove_mapel(db, admin.user, kode, guru_id)
+    admin_service.remove_mapel(db, admin.user, kode, guru_id, mapel_id)
     return _no_content()
 
 

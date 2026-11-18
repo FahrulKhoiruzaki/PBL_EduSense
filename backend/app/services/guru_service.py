@@ -1,10 +1,20 @@
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 from sqlalchemy import and_, case, exists, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.models import Absensi, Guru, Kelas, Nilai, Siswa
+from app.models import (
+    Absensi,
+    Guru,
+    Kelas,
+    KlasifikasiSiswa,
+    MataPelajaran,
+    Nilai,
+    PeriodeAkademik,
+    Siswa,
+)
 from app.models.base import KategoriNilai, MetodeInput, StatusAbsensi
 from app.schemas.guru import (
     AktivitasOut,
@@ -15,8 +25,10 @@ from app.schemas.guru import (
     TrenOut,
 )
 from app.services.notification_service import notify, notify_parents_of_attendance, wali_user_ids
+from app.services.periods import grades_in, period_out
 from app.services.stats import (
     PRESENT,
+    trend_points,
     STATUS_LABEL,
     grade_rows,
     round_int,
@@ -62,17 +74,19 @@ def class_summaries(db: Session, classes: list[Kelas], today: date) -> list[Kela
     return result
 
 
-def _declining_students(db: Session, student_ids: list[int]) -> set[int]:
-    partition = [Nilai.siswa_id, Nilai.kategori]
+def _declining_students(
+    db: Session, student_ids: list[int], periode: PeriodeAkademik | None
+) -> set[int]:
+    """Nilai terbaru turun >= DECLINE_THRESHOLD dari nilai sebelumnya pada komponen yang sama."""
+    partition = [Nilai.siswa_id, Nilai.komponen_id, Nilai.kategori]
     previous = func.lag(Nilai.nilai).over(partition_by=partition, order_by=[Nilai.tanggal, Nilai.id])
     recency = func.row_number().over(
         partition_by=partition, order_by=[Nilai.tanggal.desc(), Nilai.id.desc()]
     )
-    ranked = (
-        select(Nilai.siswa_id, Nilai.nilai, previous.label("prev"), recency.label("rn"))
-        .where(Nilai.siswa_id.in_(student_ids))
-        .subquery()
+    stmt = select(Nilai.siswa_id, Nilai.nilai, previous.label("prev"), recency.label("rn")).where(
+        Nilai.siswa_id.in_(student_ids)
     )
+    ranked = grades_in(stmt, periode).subquery()
     return set(
         db.scalars(
             select(ranked.c.siswa_id).where(
@@ -84,13 +98,75 @@ def _declining_students(db: Session, student_ids: list[int]) -> set[int]:
     )
 
 
-def class_detail(db: Session, kelas: Kelas, today: date) -> KelasDetailOut:
+def _category_scores(
+    db: Session, ids: list[int], periode: PeriodeAkademik | None
+) -> tuple[dict[tuple[int, KategoriNilai], Decimal], dict[int, str | None]]:
+    """Skor Literasi/Numerasi per siswa dan klasifikasinya untuk periode yang ditampilkan.
+
+    Dengan periode: skor dan klasifikasi diambil dari hasil perhitungan periode itu (rumus yang
+    sama dengan chart klasifikasi). Tanpa periode (belum ditetapkan admin): rata-rata semua nilai
+    dan klasifikasi lama di kolom siswa.
+    """
+    if periode is None:
+        averages = {
+            (siswa_id, kategori): avg
+            for siswa_id, kategori, avg in db.execute(
+                select(Nilai.siswa_id, Nilai.kategori, func.avg(Nilai.nilai))
+                .where(Nilai.siswa_id.in_(ids), Nilai.kategori.is_not(None))
+                .group_by(Nilai.siswa_id, Nilai.kategori)
+            )
+        }
+        labels = {
+            siswa_id: label.value if label else None
+            for siswa_id, label in db.execute(
+                select(Siswa.id, Siswa.status_klasifikasi).where(Siswa.id.in_(ids))
+            )
+        }
+        return averages, labels
+
+    scores: dict[tuple[int, KategoriNilai], Decimal] = {}
+    labels: dict[int, str | None] = {}
+    for row in db.scalars(
+        select(KlasifikasiSiswa).where(
+            KlasifikasiSiswa.periode_id == periode.id, KlasifikasiSiswa.siswa_id.in_(ids)
+        )
+    ):
+        if row.skor_literasi is not None:
+            scores[(row.siswa_id, KategoriNilai.LITERASI)] = row.skor_literasi
+        if row.skor_numerasi is not None:
+            scores[(row.siswa_id, KategoriNilai.NUMERASI)] = row.skor_numerasi
+        labels[row.siswa_id] = row.klasifikasi.value if row.klasifikasi else None
+    return scores, labels
+
+
+def nilai_out(r) -> NilaiOut:
+    return NilaiOut(
+        id=r.id,
+        siswa_id=r.siswa_id,
+        siswa=r.nama,
+        kategori=r.kategori.value if r.kategori else None,
+        jenis_ujian=r.jenis_ujian,
+        periode_id=r.periode_id,
+        mapel_id=r.mapel_id,
+        mapel=r.mapel,
+        komponen_id=r.komponen_id,
+        komponen=r.komponen,
+        nilai=float(r.nilai),
+        nilai_sebelumnya=float(r.prev) if r.prev is not None else None,
+        tanggal=r.tanggal,
+        catatan_guru=r.catatan_guru,
+    )
+
+
+def class_detail(
+    db: Session, kelas: Kelas, today: date, periode: PeriodeAkademik | None
+) -> KelasDetailOut:
     students = list(db.scalars(select(Siswa).where(Siswa.kelas_id == kelas.id).order_by(Siswa.nama)))
     ids = [s.id for s in students]
     if not ids:
         return KelasDetailOut(
-            siswa=[], nilai=[], rata_literasi=0, rata_numerasi=0,
-            tren=TrenOut(literasi=[], numerasi=[], kehadiran=[]),
+            periode=period_out(periode), siswa=[], nilai=[], rata_literasi=0, rata_numerasi=0,
+            tren=TrenOut(literasi=[], numerasi=[], kehadiran=[], titik=trend_points(db, [], 0, periode)),
         )
 
     attendance = {
@@ -101,15 +177,8 @@ def class_detail(db: Session, kelas: Kelas, today: date) -> KelasDetailOut:
             )
         )
     }
-    averages = {
-        (siswa_id, kategori): avg
-        for siswa_id, kategori, avg in db.execute(
-            select(Nilai.siswa_id, Nilai.kategori, func.avg(Nilai.nilai))
-            .where(Nilai.siswa_id.in_(ids))
-            .group_by(Nilai.siswa_id, Nilai.kategori)
-        )
-    }
-    declining = _declining_students(db, ids)
+    scores, labels = _category_scores(db, ids, periode)
+    declining = _declining_students(db, ids, periode)
 
     siswa_out = []
     for s in students:
@@ -118,49 +187,30 @@ def class_detail(db: Session, kelas: Kelas, today: date) -> KelasDetailOut:
             SiswaKelasOut(
                 id=s.id,
                 nama=s.nama,
-                klasifikasi=s.status_klasifikasi.value if s.status_klasifikasi else None,
+                klasifikasi=labels.get(s.id),
                 status=status.value if status else None,
                 waktu=str(waktu) if waktu else None,
-                literasi=round_int(averages.get((s.id, KategoriNilai.LITERASI))),
-                numerasi=round_int(averages.get((s.id, KategoriNilai.NUMERASI))),
+                literasi=round_int(scores.get((s.id, KategoriNilai.LITERASI))),
+                numerasi=round_int(scores.get((s.id, KategoriNilai.NUMERASI))),
                 menurun=s.id in declining,
             )
         )
 
-    grades = grade_rows(db, ids, GRADE_LIMIT)
-    nilai_out = [
-        NilaiOut(
-            id=r.id,
-            siswa_id=r.siswa_id,
-            siswa=r.nama,
-            kategori=r.kategori.value,
-            jenis_ujian=r.jenis_ujian,
-            nilai=float(r.nilai),
-            nilai_sebelumnya=float(r.prev) if r.prev is not None else None,
-            tanggal=r.tanggal,
-            catatan_guru=r.catatan_guru,
-        )
-        for r in grades
-    ]
-
     def class_average(category: KategoriNilai) -> int:
-        return round_int(
-            db.scalar(
-                select(func.avg(Nilai.nilai)).where(
-                    Nilai.siswa_id.in_(ids), Nilai.kategori == category
-                )
-            )
-        )
+        values = [v for (_, k), v in scores.items() if k is category]
+        return round_int(sum(values) / len(values)) if values else 0
 
     return KelasDetailOut(
+        periode=period_out(periode),
         siswa=siswa_out,
-        nilai=nilai_out,
+        nilai=[nilai_out(r) for r in grade_rows(db, ids, GRADE_LIMIT, periode)],
         rata_literasi=class_average(KategoriNilai.LITERASI),
         rata_numerasi=class_average(KategoriNilai.NUMERASI),
         tren=TrenOut(
-            literasi=weekly_grade_trend(db, ids, KategoriNilai.LITERASI, TREND_POINTS),
-            numerasi=weekly_grade_trend(db, ids, KategoriNilai.NUMERASI, TREND_POINTS),
-            kehadiran=weekly_attendance_trend(db, ids, TREND_POINTS),
+            literasi=weekly_grade_trend(db, ids, KategoriNilai.LITERASI, TREND_POINTS, periode),
+            numerasi=weekly_grade_trend(db, ids, KategoriNilai.NUMERASI, TREND_POINTS, periode),
+            kehadiran=weekly_attendance_trend(db, ids, TREND_POINTS, periode),
+            titik=trend_points(db, ids, TREND_POINTS, periode),
         ),
     )
 
@@ -273,8 +323,11 @@ def recent_activities(
         .limit(ACTIVITY_LIMIT)
     ).all()
     nilai_rows = db.execute(
-        select(Siswa.nama, Nilai.id, Nilai.kategori, Nilai.created_at, Nilai.updated_at)
+        select(
+            Siswa.nama, Nilai.id, Nilai.kategori, MataPelajaran.nama, Nilai.created_at, Nilai.updated_at
+        )
         .join(Siswa, Siswa.id == Nilai.siswa_id)
+        .outerjoin(MataPelajaran, MataPelajaran.id == Nilai.mapel_id)
         .where(Siswa.kelas_id.in_(class_ids), Nilai.updated_at >= since)
         .order_by(Nilai.updated_at.desc())
         .limit(ACTIVITY_LIMIT)
@@ -294,14 +347,14 @@ def recent_activities(
     items += [
         AktivitasOut(
             judul=(
-                f"Nilai {kategori.value} {nama} "
+                f"Nilai {mapel or kategori.value} {nama} "
                 + ("diperbarui" if updated > created else "ditambahkan")
             ),
             target="nilai",
             target_id=nilai_id,
             created_at=updated,
         )
-        for nama, nilai_id, kategori, created, updated in nilai_rows
+        for nama, nilai_id, kategori, mapel, created, updated in nilai_rows
     ]
     items.sort(key=lambda i: i.created_at, reverse=True)
     return items[:ACTIVITY_LIMIT]

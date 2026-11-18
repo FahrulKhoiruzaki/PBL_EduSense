@@ -6,23 +6,23 @@
 Hanya untuk development: menolak berjalan bila ENVIRONMENT=production. Semua akun demo memakai
 password yang sama (lihat DEMO_PASSWORD) kecuali satu guru yang sengaja masih memakai password
 sementara agar alur "wajib ganti password" bisa dicoba. Absensi hari ini sengaja dikosongkan.
+
+Data akademik (periode, mapel, kelas 1-6, nilai per komponen, absensi, klasifikasi hasil hitung)
+diisi oleh scripts.seed_akademik, yang juga bisa dijalankan sendiri dan aman diulang.
 """
 
 import argparse
-import random
 import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal
 
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import build_engine, build_session_factory
 from app.models import (
-    Absensi,
     Berita,
     Fasilitas,
     Faq,
@@ -33,39 +33,33 @@ from app.models import (
     Kegiatan,
     Kelas,
     LogAktivitas,
-    MapelGuru,
+    MataPelajaran,
     Nilai,
     Notifikasi,
     OrangTua,
     PengaturanSekolah,
     Pengumuman,
     ProfilSekolah,
-    RiwayatKlasifikasi,
     Siswa,
     User,
 )
 from app.models.base import (
     BeritaKategori,
     FaqKategori,
-    KategoriNilai,
     KegiatanKategori,
-    Klasifikasi,
     KontenStatus,
     LogTipe,
-    MetodeInput,
-    StatusAbsensi,
     UserRole,
 )
 from app.services import cms_pages
 from app.services.auth_service import create_user
+from scripts import seed_akademik
 
 DOMAIN = "sdn02.test"
 DEMO_PASSWORD = "Password123"
 TEMP_PASSWORD = "Sementara123"
 ADMIN_EMAIL = f"admin@{DOMAIN}"
 SINGLETONS = {"pengaturan_sekolah", "profil_sekolah"}
-
-M, C, P = Klasifikasi.MAHIR, Klasifikasi.CUKUP, Klasifikasi.PERLU_PENDAMPINGAN
 
 
 @dataclass(frozen=True)
@@ -75,7 +69,6 @@ class GuruSpec:
     nip: str | None
     jabatan: str
     wali: str | None = None
-    mapel: tuple[str, ...] = ()
     temporary: bool = False
 
 
@@ -85,18 +78,14 @@ class SiswaSpec:
     kelas: str
     parent: str
     nis: str
-    klasifikasi: Klasifikasi
-    riwayat: tuple[Klasifikasi, Klasifikasi, Klasifikasi]  # dua bulan lalu, bulan lalu, bulan ini
-    literasi: tuple[int, int]  # nilai awal -> akhir (rata-rata menuju akhir)
-    numerasi: tuple[int, int]
-    hadir: float  # peluang hadir tepat waktu pada hari sekolah
-    drop_last: bool = False
 
 
+# Penugasan mapel per kelas ada di seed_akademik.EXISTING_TEACHES:
+# rina = wali 5A + mapel 5B, andi = mapel 5A dan 5B, sari = wali 5B + mapel 5A.
 GURU = [
-    GuruSpec("rina", "Bu Rina Wulandari", "198504122010012001", "Wali Kelas 5A", wali="5A", mapel=("5B",)),
-    GuruSpec("andi", "Pak Andi Pratama", "198811032012011003", "Guru Mapel", mapel=("5A", "5B")),
-    GuruSpec("sari", "Bu Sari Dewi", "199002172015022002", "Wali Kelas 5B", wali="5B", mapel=("5A",)),
+    GuruSpec("rina", "Bu Rina Wulandari", "198504122010012001", "Wali Kelas 5A", wali="5A"),
+    GuruSpec("andi", "Pak Andi Pratama", "198811032012011003", "Guru Mapel"),
+    GuruSpec("sari", "Bu Sari Dewi", "199002172015022002", "Wali Kelas 5B", wali="5B"),
     GuruSpec("hadi", "Pak Hadi Nugroho", None, "Guru Baru", temporary=True),
 ]
 
@@ -110,19 +99,18 @@ PARENTS = {
     "eko": "Bapak Prasetyo",
 }
 
+# Pola nilai dan kehadiran tiap siswa ada di seed_akademik.BASE_PROFILES (berdasarkan NIS);
+# klasifikasinya DIHITUNG dari nilai, tidak diisi langsung.
 SISWA = [
-    SiswaSpec("Ahmad Rizky Wijaya", "5A", "wijaya", "2024001", C, (C, C, C), (78, 86), (72, 76), 0.80),
-    SiswaSpec("Siti Aulia", "5A", "siti", "2024002", M, (M, M, M), (90, 94), (88, 91), 0.97),
-    SiswaSpec("Dimas Arya", "5A", "dimas", "2024003", P, (C, P, P), (64, 56), (58, 52), 0.60, drop_last=True),
-    SiswaSpec("Nadia Putri", "5A", "nadia", "2024004", C, (C, C, C), (80, 83), (70, 74), 0.88),
-    SiswaSpec("Budi Santoso", "5B", "budi", "2024005", C, (P, C, C), (72, 79), (75, 80), 0.85),
-    SiswaSpec("Citra Lestari", "5B", "citra", "2024006", M, (C, M, M), (85, 90), (82, 88), 0.95),
-    SiswaSpec("Eko Prasetyo", "5B", "eko", "2024007", P, (P, P, P), (60, 63), (65, 62), 0.55),
-    SiswaSpec("Salsa Wijaya", "5B", "wijaya", "2024008", C, (C, C, C), (77, 81), (79, 84), 0.90),
+    SiswaSpec("Ahmad Rizky Wijaya", "5A", "wijaya", "2024001"),
+    SiswaSpec("Siti Aulia", "5A", "siti", "2024002"),
+    SiswaSpec("Dimas Arya", "5A", "dimas", "2024003"),
+    SiswaSpec("Nadia Putri", "5A", "nadia", "2024004"),
+    SiswaSpec("Budi Santoso", "5B", "budi", "2024005"),
+    SiswaSpec("Citra Lestari", "5B", "citra", "2024006"),
+    SiswaSpec("Eko Prasetyo", "5B", "eko", "2024007"),
+    SiswaSpec("Salsa Wijaya", "5B", "wijaya", "2024008"),
 ]
-
-ASSESSMENTS = ["Ulangan Harian", "Kuis", "Tugas Mandiri", "Ulangan Harian", "Kuis", "UTS"]
-GRADE_NOTES = {0: "Pertahankan.", 3: "Perlu latihan tambahan."}
 
 
 @dataclass
@@ -132,38 +120,11 @@ class Seeded:
     kelas: dict[str, Kelas] = field(default_factory=dict)
     siswa: dict[str, Siswa] = field(default_factory=dict)
     parents: dict[str, OrangTua] = field(default_factory=dict)
-    first_grade: dict[str, Nilai] = field(default_factory=dict)
-
-
-def school_days(today: date, count: int = 28) -> list[date]:
-    days, cursor = [], today - timedelta(days=1)
-    while len(days) < count:
-        if cursor.weekday() < 5:
-            days.append(cursor)
-        cursor -= timedelta(days=1)
-    return sorted(days)
-
-
-def weekday_on_or_before(day: date) -> date:
-    while day.weekday() >= 5:
-        day -= timedelta(days=1)
-    return day
-
-
-def month_start(today: date, back: int) -> date:
-    year, month = today.year, today.month - back
-    while month <= 0:
-        year, month = year - 1, month + 12
-    return date(year, month, 1)
 
 
 def academic_year(today: date) -> str:
     start = today.year if today.month >= 7 else today.year - 1
     return f"{start}/{start + 1}"
-
-
-def stamp(day: date, clock: time | None, tz) -> datetime:
-    return datetime.combine(day, clock or time(8, 0), tzinfo=tz)
 
 
 def seed_accounts(db: Session, s: Seeded) -> None:
@@ -199,90 +160,40 @@ def seed_classes(db: Session, s: Seeded) -> None:
     for spec in GURU:
         if spec.wali:
             s.kelas[spec.wali].wali_kelas_id = s.guru[spec.key].id
-        for code in spec.mapel:
-            db.add(MapelGuru(guru_id=s.guru[spec.key].id, kelas_id=s.kelas[code].id))
     for spec in SISWA:
         siswa = Siswa(
             nis=spec.nis, nama=spec.nama, kelas_id=s.kelas[spec.kelas].id,
-            orang_tua_id=s.parents[spec.parent].id, status_klasifikasi=spec.klasifikasi,
+            orang_tua_id=s.parents[spec.parent].id,
         )
         db.add(siswa)
         s.siswa[spec.nama] = siswa
     db.flush()
 
 
-def recorder_for(s: Seeded, kelas: str) -> Guru:
-    for spec in GURU:
-        if kelas in spec.mapel:
-            return s.guru[spec.key]
-    raise LookupError(kelas)
-
-
-def seed_history(db: Session, s: Seeded, today: date, tz) -> None:
-    rng = random.Random(2026)
-    days = school_days(today)
-
-    for spec in SISWA:
-        siswa, guru = s.siswa[spec.nama], recorder_for(s, spec.kelas)
-
-        for back, klasifikasi in zip((2, 1, 0), spec.riwayat):
-            db.add(RiwayatKlasifikasi(
-                siswa_id=siswa.id, periode=month_start(today, back), klasifikasi=klasifikasi,
-            ))
-
-        for day in days:
-            roll = rng.random()
-            if roll < spec.hadir:
-                status, clock = StatusAbsensi.HADIR, time(6, rng.randint(40, 59), rng.randint(0, 59))
-            elif roll < spec.hadir + (1 - spec.hadir) * 0.5:
-                status, clock = StatusAbsensi.TERLAMBAT, time(7, rng.randint(16, 40), rng.randint(0, 59))
-            else:
-                status, clock = rng.choice([StatusAbsensi.IZIN, StatusAbsensi.SAKIT, StatusAbsensi.ALPA]), None
-            when = stamp(day, clock, tz)
-            db.add(Absensi(
-                siswa_id=siswa.id, tanggal=day, waktu=clock, status=status,
-                metode_input=MetodeInput.MANUAL, dicatat_oleh=guru.id,
-                catatan="Keterangan dari orang tua." if status is StatusAbsensi.IZIN else None,
-                created_at=when, updated_at=when,
-            ))
-
-        dates = [weekday_on_or_before(today - timedelta(days=3 + 7 * k)) for k in range(5, -1, -1)]
-        for category, (start, end) in (
-            (KategoriNilai.LITERASI, spec.literasi),
-            (KategoriNilai.NUMERASI, spec.numerasi),
-        ):
-            scores = [
-                max(0, min(100, round(start + (end - start) * i / 5 + rng.uniform(-2, 2))))
-                for i in range(6)
-            ]
-            if spec.drop_last and category is KategoriNilai.LITERASI:
-                scores[-1] = scores[-2] - 7
-            for i, (day, score) in enumerate(zip(dates, scores)):
-                when = stamp(day, time(10, 0), tz)
-                grade = Nilai(
-                    siswa_id=siswa.id, kategori=category, jenis_ujian=ASSESSMENTS[i],
-                    nilai=Decimal(score), tanggal=day, catatan_guru=GRADE_NOTES.get(i),
-                    dicatat_oleh=guru.id, created_at=when, updated_at=when,
-                )
-                db.add(grade)
-                if i == 5 and category is KategoriNilai.LITERASI:
-                    s.first_grade[spec.nama] = grade
-    db.flush()
+def latest_grade(db: Session, siswa: Siswa, mapel_kode: str) -> Nilai:
+    return db.scalar(
+        select(Nilai)
+        .join(MataPelajaran, MataPelajaran.id == Nilai.mapel_id)
+        .where(Nilai.siswa_id == siswa.id, MataPelajaran.kode == mapel_kode)
+        .order_by(Nilai.tanggal.desc(), Nilai.id.desc())
+        .limit(1)
+    )
 
 
 def seed_notifications(db: Session, s: Seeded, today: date, tz) -> None:
     now = datetime.now(tz)
     yesterday = now - timedelta(days=1)
     ahmad, dimas = s.siswa["Ahmad Rizky Wijaya"], s.siswa["Dimas Arya"]
+    ahmad_grade, dimas_grade = latest_grade(db, ahmad, "BIN").id, latest_grade(db, dimas, "BIN").id
     guru_notes = [
-        (s.users["rina"], "Nilai baru ditambahkan.", "nilai", s.first_grade[ahmad.nama].id, False, now),
+        (s.users["rina"], "Nilai baru ditambahkan.", "nilai", ahmad_grade, False, now),
         (s.users["rina"], "Absensi Kelas 5A selesai.", "absensi", None, True, yesterday),
-        (s.users["sari"], "Nilai baru ditambahkan.", "nilai", s.first_grade[dimas.nama].id, False, now),
+        (s.users["sari"], "Nilai baru ditambahkan.", "nilai", dimas_grade, False, now),
     ]
     parent_notes = [
-        (s.users["ortu.wijaya"], "Nilai Literasi baru untuk Ahmad.", "nilai", s.first_grade[ahmad.nama].id, False, now),
+        (s.users["ortu.wijaya"], "Nilai Bahasa Indonesia baru untuk Ahmad.", "nilai", ahmad_grade, False, now),
         (s.users["ortu.wijaya"], "Kehadiran Ahmad hari ini tercatat: Hadir.", "kehadiran", None, True, yesterday),
-        (s.users["ortu.dimas"], "Nilai Literasi baru untuk Dimas.", "nilai", s.first_grade[dimas.nama].id, False, now),
+        (s.users["ortu.dimas"], "Nilai Bahasa Indonesia baru untuk Dimas.", "nilai", dimas_grade, False, now),
     ]
     for user, judul, target, target_id, read, when in guru_notes + parent_notes:
         db.add(Notifikasi(
@@ -293,8 +204,7 @@ def seed_notifications(db: Session, s: Seeded, today: date, tz) -> None:
 
 def seed_settings_and_logs(db: Session, s: Seeded, today: date, tz) -> None:
     settings = db.get(PengaturanSekolah, True)
-    settings.tahun_ajaran = academic_year(today)
-    settings.batas_jam_terlambat = time(7, 15)
+    settings.batas_jam_terlambat = time(7, 15)  # tahun ajaran mengikuti periode aktif (seed_akademik)
 
     admin = s.users["admin"]
     now = datetime.now(tz)
@@ -500,7 +410,8 @@ def populate(db: Session, tz) -> None:
     try:
         seed_accounts(db, seeded)
         seed_classes(db, seeded)
-        seed_history(db, seeded, today, tz)
+        db.flush()
+        seed_akademik.populate_academic(db, tz, today, commit=False)
         seed_notifications(db, seeded, today, tz)
         seed_settings_and_logs(db, seeded, today, tz)
         seed_website(db, seeded, today)
@@ -533,11 +444,14 @@ def print_accounts() -> None:
     rows = [
         ("Admin (web)", ADMIN_EMAIL, DEMO_PASSWORD, "Login Admin di website"),
         ("Guru - wali 5A + mapel 5B", f"rina@{DOMAIN}", DEMO_PASSWORD, "wali 5A hanya melihat 5A; mencatat di 5B"),
-        ("Guru - mapel 5A & 5B", f"andi@{DOMAIN}", DEMO_PASSWORD, "bisa absen, nilai, scan wajah"),
+        ("Guru - mapel 5A & 5B", f"andi@{DOMAIN}", DEMO_PASSWORD, "BIN, MTK, SBD; absen, nilai, scan wajah"),
         ("Guru - wali 5B + mapel 5A", f"sari@{DOMAIN}", DEMO_PASSWORD, ""),
         ("Guru - password sementara", f"hadi@{DOMAIN}", TEMP_PASSWORD, "wajib ganti password; belum punya kelas"),
         ("Orang tua - 2 anak (5A, 5B)", f"ortu.wijaya@{DOMAIN}", DEMO_PASSWORD, "Ahmad & Salsa"),
         ("Orang tua - 1 anak", f"ortu.siti@{DOMAIN}", DEMO_PASSWORD, "juga: ortu.dimas, nadia, budi, citra, eko"),
+        ("Guru wali 1A/2A/3A/4A/6A", f"wati@{DOMAIN}", DEMO_PASSWORD, "juga: joko, lina, bayu, dewi"),
+        ("Guru PJOK / Agama / Mulok", f"agus@{DOMAIN}", DEMO_PASSWORD, "juga: nur, maya (semua kelas)"),
+        ("Orang tua siswa tambahan", f"ortu.<NIS>@{DOMAIN}", DEMO_PASSWORD, "mis. ortu.261100@" + DOMAIN),
     ]
     print("\nAkun demo:")
     for label, email, password, note in rows:
@@ -570,12 +484,20 @@ def main() -> int:
             reset_database(db)
             db.commit()
         elif db.scalar(text("SELECT count(*) FROM users")):
-            print("Database sudah berisi data; tidak diubah. Pakai --reset untuk mengisi ulang dari awal.")
+            print("Database sudah berisi data; tidak diubah. Pakai --reset untuk mengisi ulang dari awal,")
+            print("atau `python -m scripts.seed_akademik` untuk MELENGKAPI data akademik tanpa menghapus.")
             return 0
 
         populate(db, settings.tzinfo)
 
-    print(f"Selesai: {len(SISWA)} siswa, {len(GURU)} guru, {len(PARENTS)} akun orang tua, 3 kelas.")
+        counts = {
+            "siswa": db.scalar(select(func.count()).select_from(Siswa)),
+            "guru": db.scalar(select(func.count()).select_from(Guru)),
+            "kelas": db.scalar(select(func.count()).select_from(Kelas)),
+            "nilai": db.scalar(select(func.count()).select_from(Nilai)),
+        }
+    print("Selesai: " + ", ".join(f"{v} {k}" for k, v in counts.items()) + ".")
+    print("Aturan klasifikasi yang terisi adalah CONTOH DEMO (rata-rata, Mahir >= 80, Cukup >= 65).")
     print_accounts()
     return 0
 

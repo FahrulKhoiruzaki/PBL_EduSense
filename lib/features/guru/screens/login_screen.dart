@@ -158,7 +158,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: Checkbox(
                             value: _remember,
                             onChanged: (v) => setState(() => _remember = v ?? false),
-                            activeColor: c.ink,
+                            activeColor: c.primary,
                             checkColor: c.su,
                             side: BorderSide(color: c.si, width: 1.5),
                           ),
@@ -218,7 +218,7 @@ class _LinkText extends StatelessWidget {
         child: Text(
           text,
           style: context.styleCaption.copyWith(
-            color: context.colors.ink,
+            color: context.colors.primary,
             decoration: TextDecoration.underline,
           ),
         ),

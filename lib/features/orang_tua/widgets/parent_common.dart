@@ -88,7 +88,7 @@ class ParentLineChart extends StatelessWidget {
             painter: _LineChartPainter(
               values: values,
               height: height,
-              line: c.ink,
+              line: c.primary,
               surface: c.su,
               baseline: c.si,
             ),
@@ -213,7 +213,7 @@ class TimelineItem extends StatelessWidget {
             child: Container(
               width: 9,
               height: 9,
-              decoration: BoxDecoration(color: c.ink, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle),
             ),
           ),
           Column(

@@ -14,7 +14,16 @@ from app.models.base import (
     UserRole,
 )
 from app.services.guru_service import AUTO_ALPA_NOTE
-from tests.factories import make_class, make_guru, make_student, make_user
+from tests.factories import (
+    assign,
+    make_class,
+    make_component,
+    make_guru,
+    make_period,
+    make_student,
+    make_subject,
+    make_user,
+)
 from tests.test_auth import bearer, token_for
 from tests.test_face import image, upload
 
@@ -94,6 +103,11 @@ def ahmad_data(db, school):
     add_grade(db, ahmad, date(2026, 10, 5), 90, note="Hebat")
 
 
+@pytest.fixture
+def oct_period(db, school):
+    return make_period(db, mulai=date(2026, 10, 3), selesai=date(2026, 12, 19))
+
+
 def get(client, path, headers):
     return client.get(f"{API}{path}", headers=headers)
 
@@ -134,7 +148,10 @@ class TestChildren:
 
         assert siti["klasifikasi"] is None
         assert (siti["literasi"], siti["numerasi"], siti["persen_kehadiran"], siti["jumlah_terlambat"]) == (0, 0, 0, 0)
-        assert siti["tren"] == {"literasi": [], "numerasi": [], "kehadiran": []}
+        assert siti["tren"] == {
+            "literasi": [], "numerasi": [], "kehadiran": [],
+            "titik": {"literasi": [], "numerasi": [], "kehadiran": []},
+        }
         assert siti["nilai"] == [] and siti["riwayat_klasifikasi"] == []
         assert siti["wali_kelas"] == "Bu Rina"
         assert siti["tahun_ajaran"] == "2026/2027"
@@ -145,8 +162,9 @@ class TestChildren:
         assert set(ahmad) == {
             "id", "nis", "nama", "kelas", "klasifikasi", "literasi", "numerasi", "persen_kehadiran",
             "jumlah_terlambat", "tren", "riwayat_klasifikasi", "nilai", "wali_kelas", "tahun_ajaran",
-            "diperbarui",
+            "periode", "periode_id", "diperbarui",
         }
+        assert ahmad["periode"] is None  # belum ada periode aktif: perilaku lama
         assert (ahmad["kelas"], ahmad["klasifikasi"], ahmad["wali_kelas"]) == ("5A", "Cukup", "Bu Rina")
         assert ahmad["literasi"] == 85 and ahmad["numerasi"] == 60
 
@@ -160,7 +178,32 @@ class TestChildren:
     def test_trends_are_oldest_first_weekly_series(self, client, ibu, school, ahmad_data):
         ahmad = get(client, "/children", ibu).json()[0]
 
-        assert ahmad["tren"] == {"literasi": [80, 90], "numerasi": [60], "kehadiran": [100, 50]}
+        tren = ahmad["tren"]
+        assert {k: tren[k] for k in ("literasi", "numerasi", "kehadiran")} == {
+            "literasi": [80, 90], "numerasi": [60], "kehadiran": [100, 50]
+        }
+        # Titik berlabel: data yang sama dengan Senin awal minggu dan jumlah data.
+        assert tren["titik"]["literasi"] == [
+            {"tanggal": "2026-09-28", "nilai": 80.0, "jumlah": 1},
+            {"tanggal": "2026-10-05", "nilai": 90.0, "jumlah": 1},
+        ]
+        assert tren["titik"]["kehadiran"] == [
+            {"tanggal": "2026-06-15", "nilai": 100.0, "jumlah": 1},
+            {"tanggal": "2026-10-05", "nilai": 50.0, "jumlah": 4},
+        ]
+
+    def test_trends_follow_the_active_period_like_the_averages(
+        self, client, db, ibu, school, oct_period, ahmad_data
+    ):
+        # Periode aktif mulai 3 Okt: nilai 1-2 Okt dan absensi Juni berada di luar periode.
+        ahmad = get(client, "/children", ibu).json()[0]
+
+        tren = ahmad["tren"]
+        assert {k: tren[k] for k in ("literasi", "numerasi", "kehadiran")} == {
+            "literasi": [90], "numerasi": [], "kehadiran": [50]
+        }
+        assert [p["tanggal"] for p in tren["titik"]["literasi"]] == ["2026-10-05"]
+        assert ahmad["periode"] == "Semester Ganjil 2026/2027"
 
     def test_grades_are_newest_first_with_the_previous_value(self, client, ibu, school, ahmad_data):
         grades = get(client, "/children", ibu).json()[0]["nilai"]
@@ -171,7 +214,8 @@ class TestChildren:
             ("2026-10-01", 80.0, None),
         ]
         assert set(grades[0]) == {
-            "id", "kategori", "jenis_ujian", "nilai", "nilai_sebelumnya", "tanggal", "catatan_guru",
+            "id", "kategori", "jenis_ujian", "mapel", "periode_id", "nilai", "nilai_sebelumnya", "tanggal",
+            "catatan_guru",
         }
         assert grades[0]["catatan_guru"] == "Hebat"
 
@@ -278,10 +322,14 @@ class TestNotifications:
         )
 
     def test_new_grade_notifies_the_childs_parent_with_the_grade_id(self, client, db, auth, ibu, school):
+        periode = make_period(db)
+        mtk = make_subject(db, "MTK", "Matematika")
+        assign(db, school["andi"], school["a"], mtk)
+        kuis = make_component(db, periode, mtk, "Kuis", KategoriNilai.NUMERASI)
         grade_id = client.post(
             f"{GURU}/classes/5A/grades",
             json={
-                "siswa_id": school["ahmad"].id, "kategori": "Numerasi", "jenis_ujian": "Kuis",
+                "siswa_id": school["ahmad"].id, "komponen_id": kuis.id, "jenis_ujian": "Kuis",
                 "nilai": 88, "tanggal": "2026-10-08", "catatan_guru": "",
             },
             headers=auth("andi@contoh.id"),
@@ -289,7 +337,7 @@ class TestNotifications:
 
         (item,) = get(client, "/notifications", ibu).json()
 
-        assert item["judul"] == "Nilai Numerasi baru untuk Ahmad."
+        assert item["judul"] == "Nilai Matematika baru untuk Ahmad."
         assert (item["target"], item["target_id"], item["dibaca"]) == ("nilai", grade_id, False)
         assert get(client, "/notifications", auth("bapak.budi@contoh.id")).json() == []
 

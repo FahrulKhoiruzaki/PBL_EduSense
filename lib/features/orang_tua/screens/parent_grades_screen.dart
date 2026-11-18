@@ -67,7 +67,7 @@ class _GradeList extends ConsumerWidget {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '${g.kategori.label} · ${g.jenis}',
+                                        '${g.mapelLabel} · ${g.jenis}',
                                         style: context.styleBold,
                                       ),
                                       Text(
@@ -129,7 +129,7 @@ class _GradeDetail extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Kick(grade.kategori.label),
+              Kick(grade.mapelLabel),
               Text('${grade.nilai}', style: context.styleBig.copyWith(fontSize: 40, height: 44 / 40)),
               Text(
                 '${grade.selisih >= 0 ? '▲' : '▼'} ${grade.selisih.abs()} dari sebelumnya (${grade.sebelumnya})',
@@ -138,6 +138,11 @@ class _GradeDetail extends ConsumerWidget {
               RowList(
                 children: [
                   InfoRow(label: 'Penilaian', value: Text(grade.jenis, style: context.styleBody)),
+                  if (grade.kategori != null)
+                    InfoRow(
+                      label: 'Kategori',
+                      value: Text(grade.kategori!.label, style: context.styleBody),
+                    ),
                   InfoRow(
                     label: 'Tanggal',
                     value: Text(formatDateLong(grade.tanggal), style: context.styleBody),

@@ -58,6 +58,9 @@ void main() {
     await t.tap(find.text('Lihat Statistik'));
     await t.pumpAndSettle();
     expect(find.text('Riwayat klasifikasi'), findsOneWidget);
+    // Anak kedua (Aisyah) belum punya titik tren: grafik anak pertama tidak boleh ikut tampil.
+    expect(find.textContaining('Terbaru: 82'), findsNothing);
+    expect(find.text('Belum ada nilai Literasi periode ini.'), findsOneWidget);
     await t.tap(find.text('Bulan ini'));
     await t.pumpAndSettle();
     expect(container.read(statsPeriodProvider), StatsPeriod.bulan);

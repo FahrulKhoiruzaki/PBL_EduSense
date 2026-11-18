@@ -71,7 +71,7 @@ class _ToastView extends StatelessWidget {
   }
 }
 
-const scrimColor = Color(0x8016171A);
+const scrimColor = Color(0x8029272D);
 
 Future<T?> showAppSheet<T>(BuildContext context, {required WidgetBuilder builder}) {
   return showModalBottomSheet<T>(

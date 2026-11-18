@@ -66,7 +66,7 @@ class SidebarItem extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
-        color: selected ? c.ink : Colors.transparent,
+        color: selected ? c.primary : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -79,7 +79,7 @@ class SidebarItem extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   label,
-                  style: context.styleMedium.copyWith(color: selected ? c.su : c.sl),
+                  style: context.styleMedium.copyWith(color: selected ? c.onPrimary : c.sl),
                 ),
               ),
             ),

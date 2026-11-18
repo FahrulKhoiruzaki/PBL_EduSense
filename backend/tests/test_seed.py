@@ -67,13 +67,14 @@ def test_guru_dashboard_loads_classes_with_students_grades_and_trends(client, se
     classes = {c["kelas"]: c for c in client.get(f"{API}/guru/classes", headers=headers).json()}
     detail = client.get(f"{API}/guru/classes/5A", headers=headers).json()
 
-    assert {k: classes[k]["jumlah_siswa"] for k in ("5A", "5B")} == {"5A": 4, "5B": 4}
+    assert {k: classes[k]["jumlah_siswa"] for k in ("5A", "5B")} == {"5A": 7, "5B": 7}
     assert [s["nama"] for s in detail["siswa"]] == sorted(s["nama"] for s in detail["siswa"])
     assert all(s["status"] is None for s in detail["siswa"]), "absensi hari ini harus kosong"
-    assert len(detail["nilai"]) == 4 * 12
+    assert detail["periode"]["aktif"] is True and detail["nilai"]
+    assert all(g["periode_id"] == detail["periode"]["id"] and g["mapel"] for g in detail["nilai"])
     assert detail["rata_literasi"] > 0 and len(detail["tren"]["literasi"]) >= 4
     assert len(detail["tren"]["kehadiran"]) >= 4
-    assert [s["nama"] for s in detail["siswa"] if s["menurun"]] == ["Dimas Arya"]
+    assert "Dimas Arya" in [s["nama"] for s in detail["siswa"] if s["menurun"]]
 
 
 def test_mapel_guru_can_record_in_both_classes_and_a_wali_can_record_in_the_class_she_teaches(client, seeded):
@@ -119,11 +120,14 @@ def test_parent_with_two_children_sees_both_with_real_numbers(client, seeded):
 
     assert [(k["nama"], k["kelas"]) for k in kids] == [("Ahmad Rizky Wijaya", "5A"), ("Salsa Wijaya", "5B")]
     ahmad = kids[0]
+    # Klasifikasi DIHITUNG dari nilai (pola Ahmad: rata-rata Literasi/Numerasi di kisaran 70-an).
     assert ahmad["klasifikasi"] == "Cukup" and ahmad["nis"] == "2024001"
     assert ahmad["literasi"] > 0 and ahmad["numerasi"] > 0 and 0 < ahmad["persen_kehadiran"] <= 100
-    assert len(ahmad["nilai"]) == 12 and len(ahmad["riwayat_klasifikasi"]) == 3
+    assert len(ahmad["nilai"]) > 12 and len(ahmad["riwayat_klasifikasi"]) == 3
+    assert all(" 20" in r["bulan"] for r in ahmad["riwayat_klasifikasi"]), "label semester"
     assert ahmad["wali_kelas"] == "Bu Rina Wulandari"
     assert ahmad["tahun_ajaran"] == seed.academic_year(datetime.now(JKT).date())
+    assert ahmad["periode"].endswith(ahmad["tahun_ajaran"])
     assert len(ahmad["tren"]["literasi"]) >= 4
 
 
@@ -135,7 +139,7 @@ def test_parent_attendance_history_and_notifications_have_data(client, seeded):
     history = client.get(f"{API}/ortu/children/{kid}/history", headers=headers).json()
     notes = client.get(f"{API}/ortu/notifications", headers=headers).json()
 
-    assert len(attendance) == 28
+    assert len(attendance) > 28
     assert {h["jenis"] for h in history} >= {"nilai", "klasifikasi"}
     assert notes and any(not n["dibaca"] for n in notes)
 
@@ -155,11 +159,16 @@ def test_admin_panel_loads_every_list(client, seeded):
         assert response.status_code == 200, path
         return response.json()
 
-    assert len(get("/guru")) == 4 and len(get("/siswa")) == 8 and len(get("/admins")) == 1
+    assert len(get("/guru")) == 12 and len(get("/siswa")) == 49 and len(get("/admins")) == 1
     classes = {c["kode"]: c for c in get("/classes")}
-    assert set(classes) == {"5A", "5B", "6A"} and classes["6A"] == {"kode": "6A", "wali_id": None, "mapel_ids": []}
-    assert classes["5A"]["wali_id"] is not None and len(classes["5A"]["mapel_ids"]) == 2
-    assert get("/settings") == {"tahun_ajaran": seed.academic_year(datetime.now(JKT).date()), "batas_jam_terlambat": "07:15"}
+    assert set(classes) == {"1A", "2A", "3A", "4A", "5A", "5B", "6A"}
+    assert all(c["wali_id"] is not None for c in classes.values())
+    assert all(a["mapel_id"] is not None for c in classes.values() for a in c["penugasan"])
+    assert len(classes["5A"]["mapel_ids"]) == 5  # andi, sari, guru PJOK, agama, muatan lokal
+    year = seed.academic_year(datetime.now(JKT).date())
+    settings = get("/settings")
+    assert (settings["tahun_ajaran"], settings["batas_jam_terlambat"]) == (year, "07:15")
+    assert settings["periode_aktif"].endswith(year)
     assert len(get("/logs")) >= 8
     assert get("/me")["email"] == seed.ADMIN_EMAIL
 
@@ -169,16 +178,18 @@ def test_admin_roles_follow_assignments(client, seeded):
 
     roles = {g["nama"]: g["peran"] for g in client.get(f"{API}/admin/guru", headers=headers).json()}
 
-    assert roles == {
+    assert {k: roles[k] for k in ("Bu Rina Wulandari", "Pak Andi Pratama", "Bu Sari Dewi", "Pak Hadi Nugroho")} == {
         "Bu Rina Wulandari": "wali", "Pak Andi Pratama": "mapel",
         "Bu Sari Dewi": "wali", "Pak Hadi Nugroho": "mapel",
     }
+    assert roles["Bu Dewi Anggraini"] == "wali" and roles["Bu Maya Sari"] == "mapel"
 
 
-def test_the_empty_class_can_be_deleted_but_filled_ones_cannot(client, seeded):
+def test_an_empty_class_can_be_deleted_but_filled_ones_cannot(client, seeded):
     headers = bearer(token(client, seed.ADMIN_EMAIL))
 
-    assert client.delete(f"{API}/admin/classes/6A", headers=headers).status_code == 204
+    client.post(f"{API}/admin/classes", headers=headers, json={"kode": "6B"})
+    assert client.delete(f"{API}/admin/classes/6B", headers=headers).status_code == 204
     assert client.delete(f"{API}/admin/classes/5A", headers=headers).status_code == 409
 
 
@@ -195,7 +206,7 @@ def test_public_website_shows_published_content_only(client, seeded):
         "Perpustakaan", "Ruang Kelas", "Lapangan Olahraga",
     ]
     assert len(client.get(f"{API}/public/faq").json()) == 7
-    assert len(client.get(f"{API}/public/guru").json()) == 4
+    assert len(client.get(f"{API}/public/guru").json()) == 12
     assert client.get(f"{API}/public/sekolah").json()["nama"] == "SDN 02 Pakunden"
 
 
@@ -249,3 +260,69 @@ def test_seeding_is_all_or_nothing(db, monkeypatch):
 
     assert db.scalar(select(func.count()).select_from(User)) == 0
     assert db.scalar(select(func.count()).select_from(Kelas)) == 0
+
+
+# Data akademik (scripts.seed_akademik)
+
+
+def test_every_class_from_1_to_6_has_enough_students_with_varied_results(client, seeded):
+    headers = bearer(token(client, seed.ADMIN_EMAIL))
+
+    summary = client.get(f"{API}/admin/academic/classification", headers=headers).json()
+
+    per_class = {c["kelas"]: c for c in summary["per_kelas"]}
+    assert set(per_class) == {"1A", "2A", "3A", "4A", "5A", "5B", "6A"}
+    assert all(c["total_siswa"] >= 7 for c in per_class.values())
+    r = summary["ringkasan"]
+    assert all(k["jumlah"] > 0 for k in r["kategori"]), "Mahir, Cukup, dan Perlu Pendampingan ada"
+    assert r["belum_lengkap"] >= 1 and r["tanpa_nilai"] >= 1
+    assert r["total_siswa"] == r["terklasifikasi"] + r["belum_lengkap"] + r["tanpa_nilai"] == 49
+    comparison = summary["perbandingan"]
+    assert comparison["naik"] > 0 and comparison["turun"] > 0 and comparison["tetap"] > 0
+    assert summary["aturan"]["metode"] == "rata_rata"  # aturan DEMO
+
+
+def test_local_content_subject_has_teachers_components_and_grades(client, seeded):
+    headers = bearer(token(client, seed.ADMIN_EMAIL))
+
+    subjects = {m["kode"]: m for m in client.get(f"{API}/admin/academic/subjects", headers=headers).json()}
+    components = client.get(
+        f"{API}/admin/academic/components?mapel_id={subjects['BJAWA']['id']}", headers=headers
+    ).json()
+
+    assert subjects["BJAWA"]["jenis"] == "muatan_lokal" and subjects["BJAWA"]["dipakai"] is True
+    assert subjects["IPAS"]["tingkat"] == [3, 4, 5, 6] and subjects["BING"]["aktif"] is False
+    assert components and all(k["jumlah_nilai"] > 0 for k in components)
+    maya = bearer(token(client, f"maya@{seed.DOMAIN}"))
+    mine = client.get(f"{API}/guru/classes/1A/subjects", headers=maya).json()
+    assert [(m["kode"], m["boleh_input"]) for m in mine] == [("BJAWA", True)]
+
+
+def test_seed_akademik_is_idempotent(db, seeded):
+    from scripts import seed_akademik
+
+    def totals():
+        return {
+            model.__tablename__: db.scalar(select(func.count()).select_from(model))
+            for model in (User, Siswa, Kelas, Nilai, Absensi)
+        }
+
+    before = totals()
+    report = seed_akademik.populate_academic(db, JKT)
+
+    assert report.counts == {} and totals() == before
+
+
+def test_seed_akademik_completes_an_existing_database_without_removing_user_data(db):
+    from scripts import seed_akademik
+    from tests.factories import make_class, make_guru, make_student
+
+    guru = make_guru(db, "guru.asli@contoh.id", "Guru Asli")
+    kelas = make_class(db, "3B", wali=guru)
+    siswa = make_student(db, "Siswa Asli", kelas)
+
+    seed_akademik.populate_academic(db, JKT)
+
+    db.expire_all()
+    assert db.get(Siswa, siswa.id).nama == "Siswa Asli" and db.get(Kelas, kelas.id).wali_kelas_id == guru.id
+    assert db.scalar(select(func.count()).select_from(Siswa)) == 1 + 41

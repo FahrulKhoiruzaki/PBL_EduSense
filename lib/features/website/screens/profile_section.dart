@@ -56,7 +56,7 @@ class _ProfileMenu extends StatelessWidget {
     Widget item(ProfilSection s) => Padding(
           padding: const EdgeInsets.only(bottom: 2, right: 2),
           child: Material(
-            color: s == selected ? c.ink : Colors.transparent,
+            color: s == selected ? c.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
@@ -66,7 +66,7 @@ class _ProfileMenu extends StatelessWidget {
                 child: Text(
                   s.label,
                   softWrap: !isNarrow(context),
-                  style: context.webBody.copyWith(color: s == selected ? c.su : c.sl),
+                  style: context.webBody.copyWith(color: s == selected ? c.onPrimary : c.sl),
                 ),
               ),
             ),

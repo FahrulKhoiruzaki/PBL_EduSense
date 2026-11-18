@@ -5,12 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/formatters.dart';
 import '../core/network/api_client.dart';
+import '../features/orang_tua/data/parent_models.dart' show HistoryItem;
+import '../models/academic_models.dart';
 import '../models/app_models.dart';
+import 'parent_repository.dart' show historyItemFromJson;
 
 class GradeInput {
   const GradeInput({
     required this.studentId,
-    required this.category,
+    required this.componentId,
     required this.assessment,
     required this.value,
     required this.date,
@@ -18,7 +21,11 @@ class GradeInput {
   });
 
   final int studentId;
-  final SubjectCategory category;
+
+  /// Komponen penilaian dari admin; menentukan mapel, kategori, dan periode nilai.
+  final int componentId;
+
+  /// Keterangan penilaian (mis. "Tugas Bab 2"); kosong = nama komponen.
   final String assessment;
   final int value;
   final DateTime date;
@@ -28,7 +35,26 @@ class GradeInput {
 abstract interface class GuruRepository {
   Future<List<ClassInfo>> fetchClassSummaries();
 
-  Future<ClassData> fetchClassData(String classCode);
+  /// [periodId] null = periode aktif.
+  Future<ClassData> fetchClassData(String classCode, {int? periodId});
+
+  Future<List<AcademicPeriod>> fetchPeriods();
+
+  Future<List<ClassSubject>> fetchClassSubjects(String classCode, {int? periodId});
+
+  Future<SubjectRecap> fetchRecap(String classCode, {required int subjectId, int? periodId});
+
+  Future<ClassificationSummary> fetchClassification(String classCode, {int? periodId});
+
+  /// Rekap semua siswa x mapel yang boleh dilihat guru ini (wali: semua mapel; guru mapel:
+  /// mapel yang ditugaskan). Dibatasi oleh backend.
+  Future<ClassReport> fetchClassReport(String classCode, {int? periodId});
+
+  /// Rapor satu siswa (wali: semua mapel; guru mapel: mapel yang diampu). Dibatasi backend.
+  Future<StudentReport> fetchStudentReport(String classCode, int studentId, {int? periodId});
+
+  /// Riwayat nilai, kehadiran, dan klasifikasi siswa (terbaru dulu).
+  Future<List<HistoryItem>> fetchStudentHistory(String classCode, int studentId);
 
   Future<void> setAttendance({
     required String classCode,
@@ -72,7 +98,17 @@ abstract final class GuruPaths {
   static String notificationRead(int id) => '/guru/notifications/$id/read';
   static const notificationsReadAll = '/guru/notifications/read-all';
   static const activities = '/guru/activities';
+  static const periods = '/guru/periods';
+  static String subjects(String code) => '/guru/classes/$code/subjects';
+  static String recap(String code) => '/guru/classes/$code/recap';
+  static String classification(String code) => '/guru/classes/$code/classification';
+  static String classReport(String code) => '/guru/classes/$code/report';
+  static String studentReport(String code, int id) => '/guru/classes/$code/students/$id/report';
+  static String studentHistory(String code, int id) => '/guru/classes/$code/students/$id/history';
 }
+
+Map<String, dynamic>? periodQuery(int? periodId) =>
+    periodId == null ? null : {'periode_id': periodId};
 
 class ApiGuruRepository implements GuruRepository {
   ApiGuruRepository(this._api, {DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
@@ -94,8 +130,9 @@ class ApiGuruRepository implements GuruRepository {
   }
 
   @override
-  Future<ClassData> fetchClassData(String classCode) async {
-    final json = await _api.getObject(GuruPaths.classDetail(classCode));
+  Future<ClassData> fetchClassData(String classCode, {int? periodId}) async {
+    final json =
+        await _api.getObject(GuruPaths.classDetail(classCode), query: periodQuery(periodId));
     final trend = (json['tren'] as Map<String, dynamic>?) ?? const {};
     List<int> series(String key) =>
         [for (final v in (trend[key] as List<dynamic>? ?? const [])) (v as num).round()];
@@ -108,8 +145,57 @@ class ApiGuruRepository implements GuruRepository {
       literasiTrend: series('literasi'),
       numerasiTrend: series('numerasi'),
       attendanceTrend: series('kehadiran'),
+      trendPoints: TrendSet.fromJson(trend['titik']),
+      period: json['periode'] == null
+          ? null
+          : AcademicPeriod.fromJson(json['periode'] as Map<String, dynamic>),
     );
   }
+
+  @override
+  Future<List<AcademicPeriod>> fetchPeriods() async => [
+        for (final r in await _api.getList(GuruPaths.periods)) AcademicPeriod.fromJson(r),
+      ];
+
+  @override
+  Future<List<ClassSubject>> fetchClassSubjects(String classCode, {int? periodId}) async => [
+        for (final r in await _api.getList(GuruPaths.subjects(classCode), query: periodQuery(periodId)))
+          ClassSubject.fromJson(r),
+      ];
+
+  @override
+  Future<SubjectRecap> fetchRecap(String classCode, {required int subjectId, int? periodId}) async =>
+      SubjectRecap.fromJson(await _api.getObject(
+        GuruPaths.recap(classCode),
+        query: {'mapel_id': subjectId, ...?periodQuery(periodId)},
+      ));
+
+  @override
+  Future<ClassReport> fetchClassReport(String classCode, {int? periodId}) async =>
+      ClassReport.fromJson(await _api.getObject(
+        GuruPaths.classReport(classCode),
+        query: periodQuery(periodId),
+      ));
+
+  @override
+  Future<StudentReport> fetchStudentReport(String classCode, int studentId, {int? periodId}) async =>
+      StudentReport.fromJson(await _api.getObject(
+        GuruPaths.studentReport(classCode, studentId),
+        query: periodQuery(periodId),
+      ));
+
+  @override
+  Future<List<HistoryItem>> fetchStudentHistory(String classCode, int studentId) async => [
+        for (final r in await _api.getList(GuruPaths.studentHistory(classCode, studentId)))
+          historyItemFromJson(r),
+      ];
+
+  @override
+  Future<ClassificationSummary> fetchClassification(String classCode, {int? periodId}) async =>
+      ClassificationSummary.fromJson(await _api.getObject(
+        GuruPaths.classification(classCode),
+        query: periodQuery(periodId),
+      ));
 
   @override
   Future<void> setAttendance({
@@ -215,7 +301,7 @@ class ApiGuruRepository implements GuruRepository {
 
   Map<String, dynamic> _gradeBody(GradeInput input) => {
         'siswa_id': input.studentId,
-        'kategori': input.category.label,
+        'komponen_id': input.componentId,
         'jenis_ujian': input.assessment,
         'nilai': input.value,
         'tanggal': isoDate(input.date),
@@ -225,7 +311,7 @@ class ApiGuruRepository implements GuruRepository {
   Student _student(Map<String, dynamic> json) => Student(
         id: (json['id'] as num).toInt(),
         name: json['nama'] as String,
-        classification: _classification(json['klasifikasi'] as String?),
+        classification: classificationFromLabel(json['klasifikasi']),
         status: _status(json['status'] as String?),
         time: _time(json['waktu']),
         literasi: (json['literasi'] as num?)?.round() ?? 0,
@@ -239,25 +325,23 @@ class ApiGuruRepository implements GuruRepository {
       id: (json['id'] as num).toInt(),
       studentId: (json['siswa_id'] as num).toInt(),
       studentName: json['siswa'] as String,
-      category: json['kategori'] == 'Numerasi'
-          ? SubjectCategory.numerasi
-          : SubjectCategory.literasi,
+      category: subjectCategoryFromLabel(json['kategori']),
       assessment: json['jenis_ujian'] as String,
       value: value,
       previous: (json['nilai_sebelumnya'] as num?)?.round() ?? value,
       date: DateTime.parse(json['tanggal'] as String),
       note: json['catatan_guru'] as String? ?? '',
+      periodId: (json['periode_id'] as num?)?.toInt(),
+      subjectId: (json['mapel_id'] as num?)?.toInt(),
+      subjectName: json['mapel'] as String?,
+      componentId: (json['komponen_id'] as num?)?.toInt(),
+      componentName: json['komponen'] as String?,
     );
   }
 
   AttendanceStatus _status(String? code) => AttendanceStatus.values.firstWhere(
         (s) => s.code == code,
         orElse: () => AttendanceStatus.alpa,
-      );
-
-  Classification _classification(String? label) => Classification.values.firstWhere(
-        (c) => c.label == label,
-        orElse: () => Classification.cukup,
       );
 
   String _time(Object? value) {

@@ -42,6 +42,10 @@ def _academic_year(value: str) -> str:
     return value.strip()
 
 
+def _optional_academic_year(value: str | None) -> str | None:
+    return None if value is None else _academic_year(value)
+
+
 def _late_limit(value: str | None) -> str | None:
     if value is None:
         return None
@@ -81,6 +85,9 @@ class WaliIn(BaseModel):
 
 class MapelIn(BaseModel):
     guru_id: int
+    # Mata pelajaran yang diajarkan. Kosong = penugasan tingkat kelas saja (perilaku lama): guru
+    # boleh mencatat absensi tetapi belum boleh memasukkan nilai.
+    mapel_id: int | None = None
 
 
 class MoveIn(BaseModel):
@@ -93,7 +100,11 @@ class ActiveIn(BaseModel):
 
 
 class SettingsIn(BaseModel):
-    tahun_ajaran: Annotated[str, AfterValidator(_academic_year)]
+    # Tahun ajaran mengikuti periode akademik aktif; kolom ini hanya diterima bila sama dengannya
+    # (atau bila belum ada periode aktif). Kosong = tidak diubah.
+    tahun_ajaran: Annotated[
+        str | None, BeforeValidator(_blank_to_none), AfterValidator(_optional_academic_year)
+    ] = None
     batas_jam_terlambat: Annotated[
         str | None, BeforeValidator(_blank_to_none), AfterValidator(_late_limit)
     ] = None
@@ -133,10 +144,18 @@ class SiswaAdminOut(AccountOut):
     nama_orang_tua: str
 
 
+class PenugasanOut(BaseModel):
+    guru_id: int
+    mapel_id: int | None
+    mapel: str | None
+
+
 class KelasAdminOut(BaseModel):
     kode: str
     wali_id: int | None
+    # Guru mapel (unik) di kelas ini; detail mapel per guru ada di `penugasan`.
     mapel_ids: list[int]
+    penugasan: list[PenugasanOut]
 
 
 class LogOut(BaseModel):
@@ -146,5 +165,7 @@ class LogOut(BaseModel):
 
 
 class SettingsOut(BaseModel):
+    # Dari periode akademik aktif (fallback: nilai lama pengaturan sekolah).
     tahun_ajaran: str
+    periode_aktif: str | None
     batas_jam_terlambat: str | None

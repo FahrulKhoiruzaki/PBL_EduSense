@@ -101,7 +101,7 @@ class _WebsiteMainLayoutState extends ConsumerState<WebsiteMainLayout> {
         floatingActionButton: narrow
             ? FloatingActionButton.extended(
                 heroTag: 'whatsapp-fab',
-                backgroundColor: c.ink,
+                backgroundColor: c.primary,
                 foregroundColor: c.su,
                 elevation: 2,
                 onPressed: () => openWhatsApp(context, WhatsAppTopic.umum),
@@ -227,7 +227,7 @@ class _NavButton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 2),
       child: Material(
-        color: selected ? c.ink : Colors.transparent,
+        color: selected ? c.primary : Colors.transparent,
         borderRadius: BorderRadius.circular(99),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -239,7 +239,7 @@ class _NavButton extends StatelessWidget {
               style: context.styleBody.copyWith(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: selected ? c.su : c.sl,
+                color: selected ? c.onPrimary : c.sl,
               ),
             ),
           ),

@@ -1,6 +1,7 @@
 """Pembuat data uji."""
 
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -13,8 +14,11 @@ from app.models import (
     Kegiatan,
     KegiatanFoto,
     Kelas,
+    KomponenPenilaian,
     MapelGuru,
+    MataPelajaran,
     OrangTua,
+    PeriodeAkademik,
     Pengumuman,
     Siswa,
     User,
@@ -22,6 +26,7 @@ from app.models import (
 from app.models.base import (
     BeritaKategori,
     FaqKategori,
+    KategoriNilai,
     KegiatanKategori,
     KontenStatus,
     UserRole,
@@ -73,6 +78,58 @@ def make_student(db: Session, nama: str, kelas: Kelas, ortu: OrangTua | None = N
     return siswa
 
 
+def make_period(
+    db: Session,
+    tahun: str = "2026/2027",
+    semester: int = 1,
+    mulai: date = date(2026, 7, 13),
+    selesai: date = date(2026, 12, 19),
+    *,
+    aktif: bool = True,
+) -> PeriodeAkademik:
+    periode = PeriodeAkademik(
+        tahun_ajaran=tahun, semester=semester, tanggal_mulai=mulai, tanggal_selesai=selesai, aktif=aktif
+    )
+    db.add(periode)
+    db.commit()
+    return periode
+
+
+def make_subject(
+    db: Session, kode: str, nama: str, *, jenis: str = "umum", tingkat=(1, 2, 3, 4, 5, 6), aktif: bool = True
+) -> MataPelajaran:
+    mapel = MataPelajaran(kode=kode, nama=nama, jenis=jenis, tingkat=list(tingkat), aktif=aktif)
+    db.add(mapel)
+    db.commit()
+    return mapel
+
+
+def make_component(
+    db: Session,
+    periode: PeriodeAkademik,
+    mapel: MataPelajaran,
+    nama: str,
+    kategori: KategoriNilai | None = None,
+    bobot: float | None = None,
+    *,
+    aktif: bool = True,
+) -> KomponenPenilaian:
+    komponen = KomponenPenilaian(
+        periode_id=periode.id, mapel_id=mapel.id, kategori=kategori, nama=nama,
+        bobot=Decimal(str(bobot)) if bobot is not None else None, aktif=aktif,
+    )
+    db.add(komponen)
+    db.commit()
+    return komponen
+
+
+def assign(db: Session, guru: Guru, kelas: Kelas, mapel: MataPelajaran) -> MapelGuru:
+    row = MapelGuru(guru_id=guru.id, kelas_id=kelas.id, mapel_id=mapel.id)
+    db.add(row)
+    db.commit()
+    return row
+
+
 def publish(model, db: Session, **fields):
     row = model(status=KontenStatus.TERBIT, **fields)
     db.add(row)
@@ -91,12 +148,17 @@ __all__ = [
     "Kegiatan",
     "KegiatanFoto",
     "KegiatanKategori",
+    "KategoriNilai",
     "KontenStatus",
     "Pengumuman",
     "date",
+    "assign",
     "make_class",
+    "make_component",
     "make_guru",
+    "make_period",
     "make_student",
+    "make_subject",
     "make_user",
     "publish",
 ]

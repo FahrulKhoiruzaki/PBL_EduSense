@@ -226,7 +226,7 @@ class _DayCell extends StatelessWidget {
     final c = context.colors;
     final isSelected = selected != null && dateOnly(selected!) == d;
     final isToday = d == today;
-    final foreground = isSelected ? c.su : c.ink;
+    final foreground = isSelected ? c.onPrimary : c.ink;
 
     return Semantics(
       button: true,
@@ -236,10 +236,10 @@ class _DayCell extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(2),
         child: Material(
-          color: isSelected ? c.ink : Colors.transparent,
+          color: isSelected ? c.primary : Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: isToday && !isSelected ? BorderSide(color: c.ink, width: 1.5) : BorderSide.none,
+            side: isToday && !isSelected ? BorderSide(color: c.primary, width: 1.5) : BorderSide.none,
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -265,7 +265,7 @@ class _DayCell extends StatelessWidget {
                     height: 6,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: hasEvents ? (isSelected ? c.su : c.ink) : Colors.transparent,
+                      color: hasEvents ? (isSelected ? c.onPrimary : c.accent) : Colors.transparent,
                     ),
                   ),
                 ],

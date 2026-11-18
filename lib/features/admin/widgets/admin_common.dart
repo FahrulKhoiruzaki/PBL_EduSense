@@ -177,7 +177,7 @@ class AdminChipBar<T> extends StatelessWidget {
         children: [
           for (final (value, label) in options)
             Material(
-              color: selected == value ? c.ink : c.mi,
+              color: selected == value ? c.primary : c.mi,
               borderRadius: BorderRadius.circular(99),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
@@ -190,7 +190,7 @@ class AdminChipBar<T> extends StatelessWidget {
                       widthFactor: 1,
                       child: Text(
                         label,
-                        style: context.styleBody.copyWith(color: selected == value ? c.su : c.ink),
+                        style: context.styleBody.copyWith(color: selected == value ? c.onPrimary : c.ink),
                       ),
                     ),
                   ),
@@ -340,7 +340,7 @@ class AdminCheckbox extends StatelessWidget {
         child: Checkbox(
           value: value,
           onChanged: (v) => onChanged(v ?? false),
-          activeColor: c.ink,
+          activeColor: c.primary,
           checkColor: c.su,
           side: BorderSide(color: c.si, width: 1.5),
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -418,7 +418,10 @@ class LinkText extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Text(
           text,
-          style: context.styleAdminCaption.copyWith(decoration: TextDecoration.underline),
+          style: context.styleAdminCaption.copyWith(
+            color: context.colors.primary,
+            decoration: TextDecoration.underline,
+          ),
         ),
       ),
     );

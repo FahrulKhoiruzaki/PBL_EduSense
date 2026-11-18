@@ -51,6 +51,7 @@ def guru_assignments(db: Session, guru: Guru) -> tuple[list[str], list[str]]:
         select(Kelas.nama_kelas)
         .join(MapelGuru, MapelGuru.kelas_id == Kelas.id)
         .where(MapelGuru.guru_id == guru.id)
+        .distinct()  # satu kelas bisa memiliki beberapa mapel untuk guru yang sama
         .order_by(Kelas.nama_kelas)
     ).all()
     return list(wali), list(mapel)

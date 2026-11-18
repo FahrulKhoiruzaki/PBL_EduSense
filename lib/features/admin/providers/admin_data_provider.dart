@@ -29,10 +29,11 @@ class AdminDataNotifier extends AsyncNotifier<AdminDataset> {
 
   Future<void> setWali(String code, String guruId) => _run(() => _repo.setWali(code, guruId));
 
-  Future<void> addMapel(String code, String guruId) => _run(() => _repo.addMapel(code, guruId));
+  Future<void> addMapel(String code, String guruId, {int? subjectId}) =>
+      _run(() => _repo.addMapel(code, guruId, subjectId: subjectId));
 
-  Future<void> removeMapel(String code, String guruId) =>
-      _run(() => _repo.removeMapel(code, guruId));
+  Future<void> removeMapel(String code, String guruId, {int? subjectId}) =>
+      _run(() => _repo.removeMapel(code, guruId, subjectId: subjectId));
 
   Future<void> moveStudents(List<String> ids, String target) =>
       _run(() => _repo.moveStudents(ids, target));

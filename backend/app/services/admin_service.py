@@ -15,6 +15,7 @@ from app.models import (
     Guru,
     Kelas,
     MapelGuru,
+    MataPelajaran,
     OrangTua,
     PengaturanSekolah,
     Siswa,
@@ -26,10 +27,11 @@ from app.schemas.admin import (
     CredentialsOut,
     GuruAdminOut,
     KelasAdminOut,
+    PenugasanOut,
     SettingsOut,
     SiswaAdminOut,
 )
-from app.services import auth_service, log_service
+from app.services import auth_service, grading_service, log_service, periods
 
 AccountKind = Literal["guru", "siswa", "admin"]
 EMAIL_TAKEN = "Email sudah dipakai akun lain."
@@ -147,15 +149,27 @@ def list_siswa(db: Session) -> list[SiswaAdminOut]:
 
 
 def list_classes(db: Session) -> list[KelasAdminOut]:
-    mapel: dict[int, list[int]] = {}
-    for kelas_id, guru_id in db.execute(
-        select(MapelGuru.kelas_id, MapelGuru.guru_id).order_by(MapelGuru.id)
+    assignments: dict[int, list[PenugasanOut]] = {}
+    for kelas_id, guru_id, mapel_id, mapel in db.execute(
+        select(MapelGuru.kelas_id, MapelGuru.guru_id, MapelGuru.mapel_id, MataPelajaran.nama)
+        .outerjoin(MataPelajaran, MataPelajaran.id == MapelGuru.mapel_id)
+        .order_by(MapelGuru.id)
     ):
-        mapel.setdefault(kelas_id, []).append(guru_id)
-    return [
-        KelasAdminOut(kode=k.nama_kelas, wali_id=k.wali_kelas_id, mapel_ids=mapel.get(k.id, []))
-        for k in db.scalars(select(Kelas).order_by(Kelas.nama_kelas))
-    ]
+        assignments.setdefault(kelas_id, []).append(
+            PenugasanOut(guru_id=guru_id, mapel_id=mapel_id, mapel=mapel)
+        )
+    result = []
+    for k in db.scalars(select(Kelas).order_by(Kelas.nama_kelas)):
+        rows = assignments.get(k.id, [])
+        result.append(
+            KelasAdminOut(
+                kode=k.nama_kelas,
+                wali_id=k.wali_kelas_id,
+                mapel_ids=list(dict.fromkeys(a.guru_id for a in rows)),
+                penugasan=rows,
+            )
+        )
+    return result
 
 
 # Akun
@@ -228,9 +242,12 @@ def update_siswa(
 ) -> None:
     siswa = _siswa(db, siswa_id)
     kelas = get_class(db, kelas_code)
+    moved = siswa.kelas_id != kelas.id
     siswa.nama = nama
     siswa.kelas_id = kelas.id
     siswa.orang_tua.nama_lengkap = parent_name
+    if moved:
+        _refresh_active_classification(db, [siswa.id])
     log_service.record(
         db, actor, LogTipe.SISWA, f"{log_service.actor_name(actor)} memperbarui data siswa {nama}."
     )
@@ -359,37 +376,65 @@ def set_wali(db: Session, actor: User, code: str, guru_id: int | None) -> None:
     db.commit()
 
 
-def add_mapel(db: Session, actor: User, code: str, guru_id: int) -> None:
+def add_mapel(db: Session, actor: User, code: str, guru_id: int, mapel_id: int | None = None) -> None:
     kelas = get_class(db, code)
     guru = _active_guru(db, guru_id)
-    exists = db.scalar(
-        select(MapelGuru.id).where(MapelGuru.guru_id == guru.id, MapelGuru.kelas_id == kelas.id)
+    mapel = None
+    if mapel_id is not None:
+        mapel = db.get(MataPelajaran, mapel_id)
+        if mapel is None:
+            raise AppError(422, "Mata pelajaran tidak ditemukan.", errors={"mapel_id": "Pilih mata pelajaran."})
+        if not mapel.aktif:
+            raise AppError(422, "Mata pelajaran ini sedang nonaktif.",
+                           errors={"mapel_id": "Mata pelajaran ini sedang nonaktif."})
+        if int(kelas.nama_kelas[0]) not in mapel.tingkat:
+            raise AppError(422, f"{mapel.nama} tidak diajarkan di kelas {kelas.nama_kelas[0]}.",
+                           errors={"mapel_id": "Mata pelajaran ini tidak berlaku untuk jenjang kelas ini."})
+    same = select(MapelGuru.id).where(MapelGuru.guru_id == guru.id, MapelGuru.kelas_id == kelas.id)
+    same = same.where(MapelGuru.mapel_id == mapel_id) if mapel_id is not None else same.where(
+        MapelGuru.mapel_id.is_(None)
     )
-    if exists is not None:
-        raise conflict("Guru sudah ditugaskan di kelas ini.")
-    db.add(MapelGuru(guru_id=guru.id, kelas_id=kelas.id))
+    if db.scalar(same) is not None:
+        raise conflict(
+            f"Guru sudah ditugaskan mengajar {mapel.nama} di kelas ini." if mapel
+            else "Guru sudah ditugaskan di kelas ini."
+        )
+    db.add(MapelGuru(guru_id=guru.id, kelas_id=kelas.id, mapel_id=mapel_id))
+    subject = f" {mapel.nama}" if mapel else ""
     log_service.record(
         db,
         actor,
         LogTipe.KELAS,
-        f"{log_service.actor_name(actor)} menugaskan {guru.nama} sebagai guru mapel kelas {kelas.nama_kelas}.",
+        f"{log_service.actor_name(actor)} menugaskan {guru.nama} sebagai guru mapel{subject} "
+        f"kelas {kelas.nama_kelas}.",
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise conflict("Guru sudah ditugaskan untuk mata pelajaran ini di kelas ini.") from None
 
 
-def remove_mapel(db: Session, actor: User, code: str, guru_id: int) -> None:
+def remove_mapel(
+    db: Session, actor: User, code: str, guru_id: int, mapel_id: int | None = None
+) -> None:
+    """Tanpa `mapel_id`: lepas semua penugasan guru di kelas itu (perilaku lama)."""
     kelas = get_class(db, code)
-    result = db.execute(
-        delete(MapelGuru).where(MapelGuru.guru_id == guru_id, MapelGuru.kelas_id == kelas.id)
-    )
+    stmt = delete(MapelGuru).where(MapelGuru.guru_id == guru_id, MapelGuru.kelas_id == kelas.id)
+    if mapel_id is not None:
+        stmt = stmt.where(MapelGuru.mapel_id == mapel_id)
+    result = db.execute(stmt)
     if result.rowcount == 0:
         raise not_found("Guru tidak ditugaskan di kelas ini.")
     nama = db.scalar(select(Guru.nama).where(Guru.id == guru_id)) or "Guru"
+    subject = ""
+    if mapel_id is not None:
+        subject = f" ({db.scalar(select(MataPelajaran.nama).where(MataPelajaran.id == mapel_id))})"
     log_service.record(
         db,
         actor,
         LogTipe.KELAS,
-        f"{log_service.actor_name(actor)} melepas {nama} dari kelas {kelas.nama_kelas}.",
+        f"{log_service.actor_name(actor)} melepas {nama}{subject} dari kelas {kelas.nama_kelas}.",
     )
     db.commit()
 
@@ -408,6 +453,7 @@ def move_students(db: Session, actor: User, student_ids: list[int], target_code:
     for siswa in to_move:
         siswa.kelas_id = target.id
     if to_move:
+        _refresh_active_classification(db, [s.id for s in to_move])
         log_service.record(
             db,
             actor,
@@ -418,26 +464,43 @@ def move_students(db: Session, actor: User, student_ids: list[int], target_code:
     db.commit()
 
 
+def _refresh_active_classification(db: Session, student_ids: list[int]) -> None:
+    """Hasil klasifikasi periode aktif menyimpan kelas siswa; perbarui setelah siswa pindah kelas."""
+    db.flush()
+    active = periods.active_period(db)
+    if active is not None:
+        grading_service.recompute(db, active, student_ids)
+
+
 # Pengaturan
 
 
 def get_settings(db: Session) -> SettingsOut:
     row = db.get(PengaturanSekolah, True)
+    active = periods.active_period(db)
     return SettingsOut(
-        tahun_ajaran=row.tahun_ajaran,
+        tahun_ajaran=active.tahun_ajaran if active else row.tahun_ajaran,
+        periode_aktif=active.label if active else None,
         batas_jam_terlambat=row.batas_jam_terlambat.strftime("%H:%M") if row.batas_jam_terlambat else None,
     )
 
 
-def save_settings(db: Session, actor: User, tahun_ajaran: str, late_limit: str | None) -> None:
+def save_settings(db: Session, actor: User, tahun_ajaran: str | None, late_limit: str | None) -> None:
     row = db.get(PengaturanSekolah, True)
-    row.tahun_ajaran = tahun_ajaran
+    active = periods.active_period(db)
+    if tahun_ajaran is not None and active is not None and tahun_ajaran != active.tahun_ajaran:
+        message = (
+            f"Tahun ajaran mengikuti periode aktif ({active.label}). Ubah lewat menu Periode Akademik."
+        )
+        raise AppError(422, message, errors={"tahun_ajaran": message})
+    if tahun_ajaran is not None and active is None:
+        row.tahun_ajaran = tahun_ajaran
     row.batas_jam_terlambat = time.fromisoformat(late_limit) if late_limit else None
     log_service.record(
         db,
         actor,
         LogTipe.SISTEM,
-        f"{log_service.actor_name(actor)} mengubah pengaturan sekolah: tahun ajaran {tahun_ajaran}, "
+        f"{log_service.actor_name(actor)} mengubah pengaturan sekolah: tahun ajaran {row.tahun_ajaran}, "
         f"batas jam terlambat {late_limit or 'tidak ditentukan'}.",
     )
     db.commit()

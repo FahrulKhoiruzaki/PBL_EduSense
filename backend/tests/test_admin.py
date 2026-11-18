@@ -386,8 +386,12 @@ class TestClasses:
         body = call(client, "get", "/classes", adm).json()
 
         assert body == [
-            {"kode": "5A", "wali_id": school["rina"].id, "mapel_ids": [school["andi"].id]},
-            {"kode": "5B", "wali_id": None, "mapel_ids": []},
+            {
+                "kode": "5A", "wali_id": school["rina"].id, "mapel_ids": [school["andi"].id],
+                # Penugasan dari sebelum ada data mapel: tanpa mata pelajaran.
+                "penugasan": [{"guru_id": school["andi"].id, "mapel_id": None, "mapel": None}],
+            },
+            {"kode": "5B", "wali_id": None, "mapel_ids": [], "penugasan": []},
         ]
 
     def test_create_normalises_the_code(self, client, adm):
@@ -527,7 +531,7 @@ class TestMoveStudents:
 class TestSettings:
     def test_defaults(self, client, adm):
         assert call(client, "get", "/settings", adm).json() == {
-            "tahun_ajaran": "2026/2027", "batas_jam_terlambat": None,
+            "tahun_ajaran": "2026/2027", "periode_aktif": None, "batas_jam_terlambat": None,
         }
 
     def test_save_is_visible_to_admin_and_to_guru_sessions(self, client, adm):
@@ -538,7 +542,7 @@ class TestSettings:
 
         assert response.status_code == 204
         assert call(client, "get", "/settings", adm).json() == {
-            "tahun_ajaran": "2027/2028", "batas_jam_terlambat": "07:15",
+            "tahun_ajaran": "2027/2028", "periode_aktif": None, "batas_jam_terlambat": "07:15",
         }
         session = login(client, "rina@contoh.id", PASSWORD).json()
         assert session["pengaturan"]["batas_jam_terlambat"] == "07:15"

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/academic_models.dart';
 import '../../../widgets/app_overlays.dart';
+import '../data/admin_models.dart';
+import '../providers/academic_providers.dart';
 import '../providers/admin_providers.dart';
 import '../widgets/admin_dialogs.dart';
 import 'guard_admin.dart';
@@ -123,57 +126,94 @@ Future<void> startSetWali(BuildContext context, String code) {
   );
 }
 
-Future<void> startAddMapel(BuildContext context, String code) {
+/// Menugaskan guru mengajar satu mata pelajaran di kelas ini. Mapel menentukan hak input nilai:
+/// guru hanya dapat memasukkan nilai untuk mapel yang ditugaskan kepadanya.
+Future<void> startAddMapel(BuildContext context, String code) async {
   final container = ProviderScope.containerOf(context, listen: false);
   final dialogContext = adminDialogContext(context);
   final data = container.read(adminDatasetProvider);
   final notifier = container.read(adminDataProvider.notifier);
+  final kelas = data.classes[code]!;
 
-  final assigned = data.classes[code]!.mapelIds;
-  final options = [
+  final guruOptions = [
     for (final g in data.guru)
-      if (g.active && !assigned.contains(g.id)) (g.id, g.name),
+      if (g.active) (g.id, g.name),
   ];
-  if (options.isEmpty) {
-    AppToast.show('Semua guru sudah ditugaskan di kelas ini.');
-    return Future.value();
+  if (guruOptions.isEmpty) {
+    AppToast.show('Belum ada akun guru aktif.');
+    return;
   }
+  final subjects = await guardAdmin(() => container.read(adminSubjectsProvider.future));
+  if (subjects == null) return;
+  final subjectOptions = [
+    for (final s in subjects)
+      if (s.active && s.levels.contains(kelas.level))
+        ('${s.id}', s.type == SubjectType.muatanLokal ? '${s.name} (Muatan Lokal)' : s.name),
+  ];
+  if (subjectOptions.isEmpty) {
+    AppToast.show('Belum ada mata pelajaran aktif untuk kelas ${kelas.level}. Tambahkan di menu Mata Pelajaran.');
+    return;
+  }
+  final taken = {
+    for (final a in kelas.displayAssignments)
+      if (a.subjectId != null) '${a.guruId}:${a.subjectId}',
+  };
+  if (!dialogContext.mounted) return;
 
-  return showAdminFormDialog(
+  await showAdminFormDialog(
     dialogContext,
     title: 'Tambah Guru Mapel · $code',
+    subtitle: 'Guru dapat mencatat absensi kelas ini dan memasukkan nilai mapel yang dipilih.',
     submitLabel: 'Tambah',
     fields: [
-      AdminFormField(id: 'g', label: 'Pilih guru', options: [('', 'Pilih guru…'), ...options]),
+      AdminFormField(id: 'g', label: 'Pilih guru', options: [('', 'Pilih guru…'), ...guruOptions]),
+      AdminFormField(
+        id: 'm',
+        label: 'Mata pelajaran',
+        options: [('', 'Pilih mata pelajaran…'), ...subjectOptions],
+        validator: (value, values) => taken.contains('${values['g']}:$value')
+            ? 'Guru ini sudah ditugaskan untuk mapel tersebut di kelas ini.'
+            : null,
+      ),
     ],
     onSubmit: (v) async {
       final guruId = v['g']!;
+      final subjectId = int.parse(v['m']!);
       final done = await guardAdmin(() async {
-        await notifier.addMapel(code, guruId);
+        await notifier.addMapel(code, guruId, subjectId: subjectId);
         return true;
       });
       if (done != true) return;
       final name = container.read(adminDatasetProvider).guruById(guruId)?.name ?? 'Guru';
-      AppToast.show('$name ditambahkan ke kelas $code.');
+      final subject = subjectOptions.firstWhere((o) => o.$1 == '$subjectId').$2;
+      AppToast.show('$name ditugaskan mengajar $subject di kelas $code.');
     },
   );
 }
 
-Future<void> startRemoveMapel(BuildContext context, String code, String guruId) {
+Future<void> startRemoveMapel(BuildContext context, String code, MapelAssignment assignment) {
   final container = ProviderScope.containerOf(context, listen: false);
-  final name = container.read(adminDatasetProvider).guruById(guruId)!.name;
+  final name = container.read(adminDatasetProvider).guruById(assignment.guruId)?.name ?? 'Guru';
+  final subject = assignment.subjectName;
 
   return showAdminConfirm(
     adminDialogContext(context),
-    title: 'Lepas $name dari kelas $code?',
-    description: 'Guru ini tidak lagi bisa mengisi absensi dan nilai di kelas $code.',
+    title: subject == null
+        ? 'Lepas $name dari kelas $code?'
+        : 'Lepas $name dari mapel $subject di kelas $code?',
+    description: subject == null
+        ? 'Guru ini tidak lagi bisa mengisi absensi dan nilai di kelas $code.'
+        : 'Guru ini tidak lagi bisa memasukkan nilai $subject di kelas $code. Nilai yang sudah '
+            'tercatat tetap tersimpan.',
     confirmLabel: 'Lepas',
     onConfirm: () async {
       final done = await guardAdmin(() async {
-        await container.read(adminDataProvider.notifier).removeMapel(code, guruId);
+        await container
+            .read(adminDataProvider.notifier)
+            .removeMapel(code, assignment.guruId, subjectId: assignment.subjectId);
         return true;
       });
-      if (done == true) AppToast.show('Guru mapel dilepas.');
+      if (done == true) AppToast.show('Penugasan dilepas.');
     },
   );
 }

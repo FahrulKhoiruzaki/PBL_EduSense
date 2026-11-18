@@ -22,6 +22,7 @@ class ParentProfileScreen extends ConsumerWidget {
       ('NIS', Text(kid.nis ?? '—', style: context.styleMedium)),
       ('Wali kelas', Text(kid.waliKelas ?? '—', style: context.styleMedium)),
       ('Tahun ajaran', Text(kid.tahunAjaran ?? '—', style: context.styleMedium)),
+      ('Periode', Text(kid.periode ?? 'Belum ditetapkan sekolah', style: context.styleMedium)),
       ('Klasifikasi saat ini', StatusBadge.classification(kid.klasifikasi)),
     ];
 

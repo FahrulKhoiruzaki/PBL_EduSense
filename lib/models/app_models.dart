@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'academic_models.dart';
+
 enum TeacherRole { waliKelas, guruMapel }
 
 enum AttendanceStatus {
@@ -79,7 +81,9 @@ class Student {
 
   final int id;
   final String name;
-  final Classification classification;
+
+  /// Klasifikasi pada periode yang ditampilkan; null = belum diklasifikasi (bukan "Cukup").
+  final Classification? classification;
   final AttendanceStatus status;
   final String time;
   final int literasi;
@@ -110,17 +114,36 @@ class GradeEntry {
     required this.previous,
     required this.date,
     required this.note,
+    this.periodId,
+    this.subjectId,
+    this.subjectName,
+    this.componentId,
+    this.componentName,
   });
 
   final int id;
   final int studentId;
   final String studentName;
-  final SubjectCategory category;
+
+  /// Null untuk komponen di luar Literasi/Numerasi (mis. PJOK).
+  final SubjectCategory? category;
   final String assessment;
   final int value;
   final int previous;
   final DateTime date;
   final String note;
+  final int? periodId;
+
+  /// Null untuk nilai lama (sebelum ada mata pelajaran dan komponen penilaian).
+  final int? subjectId;
+  final String? subjectName;
+  final int? componentId;
+  final String? componentName;
+
+  bool get isLegacy => componentId == null;
+
+  /// Nama mapel, atau kategori untuk nilai lama.
+  String get subjectLabel => subjectName ?? category?.label ?? 'Tanpa mapel';
 }
 
 @immutable
@@ -133,6 +156,8 @@ class ClassData {
     required this.literasiTrend,
     required this.numerasiTrend,
     required this.attendanceTrend,
+    this.period,
+    this.trendPoints = TrendSet.empty,
   });
 
   static const empty = ClassData(
@@ -152,6 +177,13 @@ class ClassData {
   final List<int> literasiTrend;
   final List<int> numerasiTrend;
   final List<int> attendanceTrend;
+
+  /// Periode akademik yang dipakai untuk nilai, rata-rata, tren, dan klasifikasi. Null = periode
+  /// belum ditetapkan admin (semua data ditampilkan).
+  final AcademicPeriod? period;
+
+  /// Tren yang sama dengan tanggal awal minggu per titik (untuk grafik bersumbu).
+  final TrendSet trendPoints;
 
   int averageOf(SubjectCategory category) =>
       category == SubjectCategory.literasi ? averageLiterasi : averageNumerasi;
@@ -197,7 +229,7 @@ class ClassificationDistribution {
   factory ClassificationDistribution.fromStudents(List<Student> students) {
     final counts = {for (final k in Classification.values) k: 0};
     for (final s in students) {
-      counts[s.classification] = counts[s.classification]! + 1;
+      if (s.classification case final k?) counts[k] = counts[k]! + 1;
     }
     return ClassificationDistribution(counts);
   }
