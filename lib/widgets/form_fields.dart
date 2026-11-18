@@ -89,6 +89,7 @@ class LabeledDropdown<T> extends StatelessWidget {
     required this.items,
     required this.onChanged,
     required this.itemLabel,
+    this.error,
   });
 
   final String label;
@@ -96,6 +97,7 @@ class LabeledDropdown<T> extends StatelessWidget {
   final List<T> items;
   final ValueChanged<T> onChanged;
   final String Function(T) itemLabel;
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
@@ -115,6 +117,11 @@ class LabeledDropdown<T> extends StatelessWidget {
             if (v != null) onChanged(v);
           },
         ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(error!, style: context.styleError),
+          ),
       ],
     );
   }

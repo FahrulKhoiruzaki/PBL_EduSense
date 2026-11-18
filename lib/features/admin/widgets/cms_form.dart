@@ -49,6 +49,21 @@ class CmsChoiceField extends CmsField {
   final String initial;
 }
 
+/// Pilihan ganda (mis. jenjang kelas 1–6); minimal satu bila [required].
+class CmsMultiChoiceField extends CmsField {
+  const CmsMultiChoiceField(
+    super.id,
+    super.label, {
+    required this.options,
+    required this.initial,
+    this.required = false,
+  });
+
+  final List<(String value, String label)> options;
+  final List<String> initial;
+  final bool required;
+}
+
 class CmsToggleField extends CmsField {
   const CmsToggleField(super.id, super.label, {this.initial = true});
 
@@ -95,6 +110,8 @@ class CmsValues {
   String choice(String id) => _values[id]! as String;
 
   bool flag(String id) => _values[id]! as bool;
+
+  List<String> choices(String id) => List<String>.of(_values[id]! as List<String>);
 
   DateTime? date(String id) => _values[id] as DateTime?;
 
@@ -172,6 +189,8 @@ class _CmsFormBodyState extends State<_CmsFormBody> {
           break;
         case CmsChoiceField():
           state[f.id] = f.options.any((o) => o.$1 == f.initial) ? f.initial : f.options.first.$1;
+        case CmsMultiChoiceField():
+          state[f.id] = [for (final o in f.options) if (f.initial.contains(o.$1)) o.$1];
         case CmsToggleField():
           state[f.id] = f.initial;
         case CmsDateField():
@@ -202,7 +221,9 @@ class _CmsFormBodyState extends State<_CmsFormBody> {
         if (f is CmsTextField && f.required && _controllers[f.id]!.text.trim().isEmpty)
           f.id: 'Kolom ini wajib diisi.'
         else if (f is CmsDateField && f.required && _state[f.id] == null)
-          f.id: 'Kolom ini wajib diisi.',
+          f.id: 'Kolom ini wajib diisi.'
+        else if (f is CmsMultiChoiceField && f.required && (_state[f.id]! as List).isEmpty)
+          f.id: 'Pilih minimal satu.',
     };
     if (errors.isNotEmpty) {
       setState(() {
@@ -306,6 +327,38 @@ class _CmsFormBodyState extends State<_CmsFormBody> {
           items: [for (final o in f.options) o.$1],
           itemLabel: (v) => f.options.firstWhere((o) => o.$1 == v).$2,
           onChanged: (v) => setState(() => _state[f.id] = v),
+          error: error,
+        );
+      case CmsMultiChoiceField():
+        final selected = _state[f.id]! as List<String>;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FieldLabel(f.label),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final (value, label) in f.options)
+                  FilterChip(
+                    label: Text(label),
+                    selected: selected.contains(value),
+                    onSelected: (on) => setState(() {
+                      final current = _state[f.id]! as List<String>;
+                      _state[f.id] = [
+                        for (final o in f.options)
+                          if (o.$1 == value ? on : current.contains(o.$1)) o.$1,
+                      ];
+                    }),
+                  ),
+              ],
+            ),
+            if (error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(error, style: context.styleError),
+              ),
+          ],
         );
       case CmsToggleField():
         return Padding(

@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../navigation/app_router.dart';
+import '../widgets/period_selector.dart';
 import '../../../core/theme.dart';
 import '../../../models/app_models.dart';
 import '../../../providers/app_providers.dart';
+import '../../../widgets/async_body.dart';
+import '../../../widgets/axis_chart.dart';
+import '../../../widgets/classification_chart.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/custom_card.dart';
 import 'attendance_screen.dart';
+import 'class_report_screen.dart';
 import 'grades_screen.dart';
 import 'history_screen.dart';
 import 'need_attention_screen.dart';
@@ -24,6 +29,11 @@ class ClassScreen extends ConsumerWidget {
 
     final menu = <(String, String, Widget)>[
       ('Nilai', 'Literasi $avgL · Numerasi $avgN', const GradesScreen()),
+      (
+        'Rekap Semua Mapel',
+        ref.watch(isWaliProvider) ? 'Nilai seluruh mapel per siswa' : 'Nilai mapel yang Anda ampu',
+        const ClassReportScreen(),
+      ),
       ('Statistik Kelas', '${summary.percent}% kehadiran', const StatsScreen()),
       ('Now Brief', 'Kondisi kelas saat ini', const NowBriefScreen()),
       ('Siswa', '${summary.total} siswa', const StudentsScreen()),
@@ -62,12 +72,14 @@ class StatsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(attendanceSummaryProvider);
-    final distribution = ref.watch(distributionProvider);
     final data = ref.watch(currentClassDataProvider);
+    final cls = ref.watch(selectedClassProvider);
+    final classification = ref.watch(classClassificationProvider(cls));
 
     return ScreenScaffold(
       title: 'Statistik Kelas',
       children: [
+        const PeriodSelector(),
         TwoColumnGrid(
           children: [
             StatCard(label: 'Total siswa', value: '${summary.total}'),
@@ -88,41 +100,19 @@ class StatsScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Kick('Klasifikasi'),
-              DistributionBar(distribution),
+              classification.when(
+                loading: () => const LoadingList(count: 1, height: 96),
+                error: (e, _) => ErrorRetry(
+                  error: e,
+                  onRetry: () => ref.invalidate(classClassificationProvider(cls)),
+                ),
+                data: (s) => ClassificationSummaryView(s),
+              ),
             ],
           ),
         ),
-        for (final (title, series) in [
-          ('Tren nilai · Literasi', data.literasiTrend),
-          ('Tren nilai · Numerasi', data.numerasiTrend),
-          ('Tren kehadiran mingguan (%)', data.attendanceTrend),
-        ])
-          if (series.isNotEmpty)
-            CustomCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Kick(title),
-                  Sparkline(series, height: 70),
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        const TextSpan(text: 'Terbaru: '),
-                        TextSpan(
-                          text: '${series.last}',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                    style: context.styleCaption,
-                  ),
-                ],
-              ),
-            ),
-        Text(
-          'Klasifikasi adalah alat bantu, bukan penilaian akhir.',
-          style: context.styleCaption,
-        ),
+        ...classTrendCharts(data),
+        Text('Klasifikasi adalah alat bantu, bukan penilaian akhir.', style: context.styleCaption),
       ],
     );
   }
@@ -136,6 +126,7 @@ class NowBriefScreen extends ConsumerWidget {
     final summary = ref.watch(attendanceSummaryProvider);
     final distribution = ref.watch(distributionProvider);
     final declining = ref.watch(decliningCountProvider);
+    final data = ref.watch(currentClassDataProvider);
     final activities = ref.watch(activitiesProvider);
     final avgL = ref.watch(averageProvider(SubjectCategory.literasi));
     final avgN = ref.watch(averageProvider(SubjectCategory.numerasi));
@@ -150,7 +141,7 @@ class NowBriefScreen extends ConsumerWidget {
       (
         'Kondisi akademik',
         'Literasi $avgL · Numerasi $avgN',
-        'Tren stabil dalam 6 pertemuan',
+        data.period == null ? 'Lihat tren mingguan di Statistik Kelas' : 'Periode: ${data.period!.label}',
         const StatsScreen(),
       ),
       (
@@ -172,10 +163,7 @@ class NowBriefScreen extends ConsumerWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: Text(
-            'Kondisi kelas saat ini · Diperbarui 07:45',
-            style: context.styleMuted,
-          ),
+          child: Text('Kondisi kelas saat ini (data terbaru dari server)', style: context.styleMuted),
         ),
         for (final (kick, headline, detail, page) in cards)
           CustomCard(
@@ -192,4 +180,49 @@ class NowBriefScreen extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// Grafik tren kelas (rata-rata nilai Literasi/Numerasi dan persen hadir per minggu) pada periode
+/// yang dipilih. Minggu tanpa data tidak digambar.
+List<Widget> classTrendCharts(ClassData data) {
+  final period = data.period?.label ?? 'semua data (periode belum ditetapkan)';
+  return [
+    ChartPanel(
+      title: 'Tren nilai Literasi kelas',
+      description:
+          'Rata-rata nilai Literasi seluruh siswa per minggu pada $period. '
+          'Sumbu X = minggu penilaian, sumbu Y = nilai 0–100. Satu indikator tidak '
+          'menggambarkan kemampuan siswa secara menyeluruh.',
+      points: weeklyChartPoints(data.trendPoints.literasi),
+      xTitle: 'Minggu (tanggal awal)',
+      yTitle: 'Nilai rata-rata',
+      countLabel: 'nilai',
+      emptyMessage: 'Belum ada nilai Literasi pada periode ini.',
+    ),
+    ChartPanel(
+      title: 'Tren nilai Numerasi kelas',
+      description:
+          'Rata-rata nilai Numerasi seluruh siswa per minggu pada $period. '
+          'Sumbu X = minggu penilaian, sumbu Y = nilai 0–100.',
+      points: weeklyChartPoints(data.trendPoints.numerasi),
+      xTitle: 'Minggu (tanggal awal)',
+      yTitle: 'Nilai rata-rata',
+      countLabel: 'nilai',
+      emptyMessage: 'Belum ada nilai Numerasi pada periode ini.',
+      tone: ChartTone.numerasi,
+    ),
+    ChartPanel(
+      title: 'Kehadiran mingguan kelas',
+      description:
+          'Persentase catatan Hadir dan Terlambat dari seluruh catatan absensi per '
+          'minggu pada $period. Sumbu Y = persentase (%).',
+      points: weeklyChartPoints(data.trendPoints.attendance),
+      xTitle: 'Minggu (tanggal awal)',
+      yTitle: 'Kehadiran (%)',
+      unit: '%',
+      countLabel: 'catatan absensi',
+      tone: ChartTone.attendance,
+      emptyMessage: 'Belum ada catatan absensi pada periode ini.',
+    ),
+  ];
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../models/academic_models.dart';
 import '../../../models/app_models.dart';
 
 enum HistoryKind {
@@ -21,11 +22,19 @@ class NilaiUjian {
     required this.sebelumnya,
     required this.tanggal,
     required this.catatan,
+    this.mapel,
   });
 
   final int id;
-  final SubjectCategory kategori;
+
+  /// Null untuk penilaian di luar Literasi/Numerasi (mis. PJOK, muatan lokal).
+  final SubjectCategory? kategori;
   final String jenis;
+
+  /// Nama mata pelajaran; null untuk nilai lama sebelum ada data mapel.
+  final String? mapel;
+
+  String get mapelLabel => mapel ?? kategori?.label ?? 'Tanpa mapel';
   final int nilai;
   final int sebelumnya;
   final DateTime tanggal;
@@ -113,13 +122,16 @@ class Anak {
     this.nis,
     this.waliKelas,
     this.tahunAjaran,
+    this.periode,
+    this.trenTitik = TrendSet.empty,
     this.diperbarui,
   });
 
   final int id;
   final String nama;
   final String kelas;
-  final Classification klasifikasi;
+  /// Null = belum diklasifikasi pada periode aktif (bukan "Cukup").
+  final Classification? klasifikasi;
   final int literasi;
   final int numerasi;
   final int persenKehadiran;
@@ -132,6 +144,12 @@ class Anak {
   final String? nis;
   final String? waliKelas;
   final String? tahunAjaran;
+
+  /// Periode akademik yang dipakai untuk klasifikasi, rata-rata, dan kehadiran.
+  final String? periode;
+
+  /// Tren dengan tanggal awal minggu (untuk grafik bersumbu).
+  final TrendSet trenTitik;
   final DateTime? diperbarui;
 
   String get namaDepan => nama.split(' ').first;

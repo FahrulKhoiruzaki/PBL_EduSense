@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+/// Palet "Soft Elegant Education": dasar Warm Ivory & Charcoal, identitas Muted Plum, aksen
+/// Dusty Rose / Soft Amber / Lavender. Semua warna aplikasi berasal dari token ini (terang & gelap).
 @immutable
 class AppColors extends ThemeExtension<AppColors> {
   const AppColors({
@@ -13,46 +15,117 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.su,
     required this.bg,
     required this.danger,
+    required this.primary,
+    required this.onPrimary,
+    required this.primarySoft,
+    required this.accent,
+    required this.amber,
+    required this.lavender,
+    required this.success,
+    required this.info,
+    required this.warning,
+    required this.chartNumerasi,
+    required this.chartAttendance,
+    required this.chartSubject,
   });
 
+  /// Teks utama (Charcoal).
   final Color ink;
+  /// Teks sekunder.
   final Color sl;
+  /// Teks tersier / label sumbu.
   final Color st;
+  /// Garis tepi.
   final Color si;
+  /// Garis halus / latar netral komponen.
   final Color mi;
+  /// Latar halaman (Warm Ivory).
   final Color fo;
+  /// Permukaan kartu.
   final Color su;
+  /// Latar terluar.
   final Color bg;
+  /// Kesalahan.
   final Color danger;
+  /// Identitas utama (Muted Plum): tombol utama, navigasi aktif, seri Literasi.
+  final Color primary;
+  /// Teks/ikon di atas [primary].
+  final Color onPrimary;
+  /// Latar lembut pilihan aktif.
+  final Color primarySoft;
+  /// Aksen sekunder (Dusty Rose).
+  final Color accent;
+  /// Penekanan informasi (Soft Amber).
+  final Color amber;
+  /// Aksen pendukung (Lavender).
+  final Color lavender;
+  /// Status berhasil/tuntas.
+  final Color success;
+  /// Status informasi.
+  final Color info;
+  /// Status perlu perhatian.
+  final Color warning;
+  /// Seri grafik Numerasi (Dusty Rose, kontras cukup untuk garis).
+  final Color chartNumerasi;
+  /// Seri grafik Kehadiran (Soft Amber, kontras cukup).
+  final Color chartAttendance;
+  /// Seri grafik mata pelajaran (Lavender, kontras cukup).
+  final Color chartSubject;
 
   static const light = AppColors(
-    ink: Color(0xFF16171A),
-    sl: Color(0xFF4A4D53),
-    st: Color(0xFF6B6E75),
-    si: Color(0xFFC4C7CC),
-    mi: Color(0xFFE3E5E8),
-    fo: Color(0xFFF2F3F5),
-    su: Color(0xFFFFFFFF),
-    bg: Color(0xFFD9DBDF),
-    danger: Color(0xFFB3423A),
+    ink: Color(0xFF29272D),
+    sl: Color(0xFF4E4A54),
+    st: Color(0xFF6B6571),
+    si: Color(0xFFCFC7CB),
+    mi: Color(0xFFEAE4E2),
+    fo: Color(0xFFF5F2F0),
+    su: Color(0xFFFFFDFB),
+    bg: Color(0xFFE6DFDC),
+    danger: Color(0xFFA8463F),
+    primary: Color(0xFF80678C),
+    onPrimary: Color(0xFFFFFFFF),
+    primarySoft: Color(0xFFEFE8F2),
+    accent: Color(0xFFB9828C),
+    amber: Color(0xFFC49A60),
+    lavender: Color(0xFFA99AB8),
+    success: Color(0xFF4E7A62),
+    info: Color(0xFF5C7896),
+    warning: Color(0xFF8C6934),
+    chartNumerasi: Color(0xFFA06A75),
+    chartAttendance: Color(0xFF98713A),
+    chartSubject: Color(0xFF7C6C92),
   );
 
   static const dark = AppColors(
-    ink: Color(0xFFF2F3F5),
-    sl: Color(0xFFA6A9AF),
-    st: Color(0xFF9A9DA4),
-    si: Color(0xFF4A4D53),
-    mi: Color(0xFF2A2C30),
-    fo: Color(0xFF0F1012),
-    su: Color(0xFF1A1B1E),
-    bg: Color(0xFF050506),
-    danger: Color(0xFFB3423A),
+    ink: Color(0xFFEFEAF0),
+    sl: Color(0xFFC9C1CD),
+    st: Color(0xFFA69EAC),
+    si: Color(0xFF4B4551),
+    mi: Color(0xFF35303A),
+    fo: Color(0xFF18161B),
+    su: Color(0xFF221F26),
+    bg: Color(0xFF0F0E11),
+    danger: Color(0xFFE07A70),
+    primary: Color(0xFFB9A1C6),
+    onPrimary: Color(0xFF1E1A22),
+    primarySoft: Color(0xFF3A3143),
+    accent: Color(0xFFD3A1AA),
+    amber: Color(0xFFD9B07A),
+    lavender: Color(0xFFC2B5CF),
+    success: Color(0xFF8DBF9F),
+    info: Color(0xFF9DB6D1),
+    warning: Color(0xFFD9B07A),
+    chartNumerasi: Color(0xFFD3A1AA),
+    chartAttendance: Color(0xFFD9B07A),
+    chartSubject: Color(0xFFC2B5CF),
   );
 
-  static const darkCardStart = Color(0xFF2A2C30);
-  static const darkCardEnd = Color(0xFF16171A);
-  static const onDarkCard = Color(0xFFF2F3F5);
-  static const onDarkCardMuted = Color(0xFFC4C7CC);
+  // Kartu "gelap" (hero, sidebar logo, login): plum tua yang sama di kedua mode.
+  static const darkCardStart = Color(0xFF554561);
+  static const darkCardEnd = Color(0xFF2E2733);
+  static const onDarkCard = Color(0xFFF5F2F0);
+  static const onDarkCardMuted = Color(0xFFDCD1E1);
+  static const onDarkCardBorder = Color(0xFF8C7C97);
 
   @override
   AppColors copyWith({
@@ -65,6 +138,18 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? su,
     Color? bg,
     Color? danger,
+    Color? primary,
+    Color? onPrimary,
+    Color? primarySoft,
+    Color? accent,
+    Color? amber,
+    Color? lavender,
+    Color? success,
+    Color? info,
+    Color? warning,
+    Color? chartNumerasi,
+    Color? chartAttendance,
+    Color? chartSubject,
   }) {
     return AppColors(
       ink: ink ?? this.ink,
@@ -76,6 +161,18 @@ class AppColors extends ThemeExtension<AppColors> {
       su: su ?? this.su,
       bg: bg ?? this.bg,
       danger: danger ?? this.danger,
+      primary: primary ?? this.primary,
+      onPrimary: onPrimary ?? this.onPrimary,
+      primarySoft: primarySoft ?? this.primarySoft,
+      accent: accent ?? this.accent,
+      amber: amber ?? this.amber,
+      lavender: lavender ?? this.lavender,
+      success: success ?? this.success,
+      info: info ?? this.info,
+      warning: warning ?? this.warning,
+      chartNumerasi: chartNumerasi ?? this.chartNumerasi,
+      chartAttendance: chartAttendance ?? this.chartAttendance,
+      chartSubject: chartSubject ?? this.chartSubject,
     );
   }
 
@@ -92,6 +189,18 @@ class AppColors extends ThemeExtension<AppColors> {
       su: Color.lerp(su, other.su, t)!,
       bg: Color.lerp(bg, other.bg, t)!,
       danger: Color.lerp(danger, other.danger, t)!,
+      primary: Color.lerp(primary, other.primary, t)!,
+      onPrimary: Color.lerp(onPrimary, other.onPrimary, t)!,
+      primarySoft: Color.lerp(primarySoft, other.primarySoft, t)!,
+      accent: Color.lerp(accent, other.accent, t)!,
+      amber: Color.lerp(amber, other.amber, t)!,
+      lavender: Color.lerp(lavender, other.lavender, t)!,
+      success: Color.lerp(success, other.success, t)!,
+      info: Color.lerp(info, other.info, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      chartNumerasi: Color.lerp(chartNumerasi, other.chartNumerasi, t)!,
+      chartAttendance: Color.lerp(chartAttendance, other.chartAttendance, t)!,
+      chartSubject: Color.lerp(chartSubject, other.chartSubject, t)!,
     );
   }
 }
@@ -161,10 +270,14 @@ abstract final class AppTheme {
   static ThemeData _build(AppColors c, Brightness brightness) {
     final scheme = ColorScheme(
       brightness: brightness,
-      primary: c.ink,
-      onPrimary: c.su,
-      secondary: c.sl,
-      onSecondary: c.su,
+      primary: c.primary,
+      onPrimary: c.onPrimary,
+      primaryContainer: c.primarySoft,
+      onPrimaryContainer: c.ink,
+      secondary: c.accent,
+      onSecondary: c.onPrimary,
+      tertiary: c.amber,
+      onTertiary: c.ink,
       error: c.danger,
       onError: Colors.white,
       surface: c.su,
@@ -189,8 +302,10 @@ abstract final class AppTheme {
       canvasColor: c.su,
       textTheme: _textTheme(c),
       extensions: [c],
-      splashColor: c.mi,
-      highlightColor: c.mi.withAlpha(120),
+      splashColor: c.primarySoft,
+      highlightColor: c.primarySoft.withAlpha(140),
+      focusColor: c.primarySoft,
+      hoverColor: c.primarySoft.withAlpha(110),
       dividerColor: c.mi,
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -199,13 +314,13 @@ abstract final class AppTheme {
         hintStyle: TextStyle(color: c.st),
         border: border(c.si),
         enabledBorder: border(c.si),
-        focusedBorder: border(c.ink, 2),
+        focusedBorder: border(c.primary, 2),
         errorBorder: border(c.danger),
         focusedErrorBorder: border(c.danger, 2),
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: c.su,
-        selectedItemColor: c.ink,
+        selectedItemColor: c.primary,
         unselectedItemColor: c.st,
         selectedLabelStyle:
             GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700),
@@ -228,6 +343,37 @@ abstract final class AppTheme {
         backgroundColor: c.su,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: c.primary,
+        selectionColor: c.primary.withAlpha(70),
+        selectionHandleColor: c.primary,
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? c.primary : null),
+        checkColor: WidgetStatePropertyAll(c.onPrimary),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? c.onPrimary : null),
+        trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? c.primary : null),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? c.primary : c.st),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(color: c.primary, linearTrackColor: c.mi),
+      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: c.primary)),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(color: c.ink, borderRadius: BorderRadius.circular(6)),
+        textStyle: GoogleFonts.inter(fontSize: 12, color: c.su),
+      ),
+      dataTableTheme: DataTableThemeData(
+        headingTextStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: c.sl),
+        dividerThickness: 1,
+      ),
+      chipTheme: ChipThemeData(
+        selectedColor: c.primarySoft,
+        checkmarkColor: c.primary,
+        side: BorderSide(color: c.si),
       ),
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/network/api_client.dart';
 import '../core/network/api_exception.dart';
+import '../models/academic_models.dart';
+import '../features/orang_tua/data/parent_models.dart' show HistoryItem;
 import '../models/app_models.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/guru_repository.dart';
@@ -136,6 +138,7 @@ class SessionNotifier extends Notifier<Session> {
   void _reset({String? notice}) {
     state = Session(role: state.role, notice: notice);
     ref.read(selectedClassProvider.notifier).select('');
+    ref.read(selectedPeriodProvider.notifier).select(null);
     ref.read(activeTabProvider.notifier).select(0);
   }
 }
@@ -182,6 +185,64 @@ class SelectedClassNotifier extends Notifier<String> {
 
 final selectedClassProvider =
     NotifierProvider<SelectedClassNotifier, String>(SelectedClassNotifier.new);
+
+/// Periode akademik yang dipilih guru; null = periode aktif (ditentukan server).
+class SelectedPeriodNotifier extends Notifier<int?> {
+  @override
+  int? build() => null;
+
+  void select(int? periodId) => state = periodId;
+}
+
+final selectedPeriodProvider =
+    NotifierProvider<SelectedPeriodNotifier, int?>(SelectedPeriodNotifier.new);
+
+final periodsProvider = FutureProvider<List<AcademicPeriod>>((ref) async {
+  if (ref.watch(currentUserIdProvider) == null) return const [];
+  return ref.watch(guruRepositoryProvider).fetchPeriods();
+});
+
+/// Mapel kelas beserta komponen penilaian periode yang dipilih.
+final classSubjectsProvider =
+    FutureProvider.family<List<ClassSubject>, String>((ref, classCode) async {
+  if (ref.watch(currentUserIdProvider) == null || classCode.isEmpty) return const [];
+  return ref
+      .watch(guruRepositoryProvider)
+      .fetchClassSubjects(classCode, periodId: ref.watch(selectedPeriodProvider));
+});
+
+final classClassificationProvider =
+    FutureProvider.family<ClassificationSummary, String>((ref, classCode) async {
+  return ref
+      .watch(guruRepositoryProvider)
+      .fetchClassification(classCode, periodId: ref.watch(selectedPeriodProvider));
+});
+
+final classReportProvider = FutureProvider.autoDispose.family<ClassReport, String>(
+  (ref, classCode) => ref
+      .watch(guruRepositoryProvider)
+      .fetchClassReport(classCode, periodId: ref.watch(selectedPeriodProvider)),
+);
+
+final studentReportProvider = FutureProvider.autoDispose.family<StudentReport, (String, int)>(
+  (ref, key) => ref
+      .watch(guruRepositoryProvider)
+      .fetchStudentReport(key.$1, key.$2, periodId: ref.watch(selectedPeriodProvider)),
+);
+
+final studentHistoryProvider = FutureProvider.autoDispose.family<List<HistoryItem>, (String, int)>(
+  (ref, key) => ref.watch(guruRepositoryProvider).fetchStudentHistory(key.$1, key.$2),
+);
+
+final subjectRecapProvider = FutureProvider.autoDispose
+    .family<SubjectRecap, (String, int)>((ref, key) async {
+  final (classCode, subjectId) = key;
+  return ref.watch(guruRepositoryProvider).fetchRecap(
+        classCode,
+        subjectId: subjectId,
+        periodId: ref.watch(selectedPeriodProvider),
+      );
+});
 
 class LoadingNotifier extends Notifier<bool> {
   Timer? _timer;
@@ -318,11 +379,20 @@ class ClassDataNotifier extends AsyncNotifier<ClassData> {
   @override
   Future<ClassData> build() async {
     if (ref.watch(currentUserIdProvider) == null || classCode.isEmpty) return ClassData.empty;
-    return ref.watch(guruRepositoryProvider).fetchClassData(classCode);
+    return ref
+        .watch(guruRepositoryProvider)
+        .fetchClassData(classCode, periodId: ref.watch(selectedPeriodProvider));
   }
 
   Future<void> _reload() async {
-    state = AsyncData(await _repo.fetchClassData(classCode));
+    state = AsyncData(
+      await _repo.fetchClassData(classCode, periodId: ref.read(selectedPeriodProvider)),
+    );
+    ref.invalidate(classClassificationProvider(classCode));
+    ref.invalidate(subjectRecapProvider);
+    ref.invalidate(classReportProvider(classCode));
+    ref.invalidate(studentReportProvider);
+    ref.invalidate(studentHistoryProvider);
     ref.invalidate(classSummariesProvider);
     ref.invalidate(activitiesAsyncProvider);
     ref.invalidate(notificationsAsyncProvider);
@@ -418,7 +488,7 @@ final studentListProvider = Provider.autoDispose<List<IndexedStudent>>((ref) {
   return [
     for (var i = 0; i < students.length; i++)
       if (students[i].name.toLowerCase().contains(query) &&
-          (filter == 'all' || students[i].classification.code == filter))
+          (filter == 'all' || students[i].classification?.code == filter))
         (index: i, student: students[i]),
   ];
 });

@@ -46,12 +46,12 @@ class _CustomButtonState extends State<CustomButton> {
         switch (widget.variant) {
       ButtonVariant.primary => widget.onDark
           ? (AppColors.onDarkCard, AppColors.darkCardEnd, null)
-          : (c.ink, c.su, null),
-      ButtonVariant.secondary => (c.mi, c.ink, null),
+          : (c.primary, c.onPrimary, null),
+      ButtonVariant.secondary => (c.primarySoft, c.ink, null),
       ButtonVariant.outline => widget.onDark
-          ? (null, AppColors.onDarkCard, const Color(0xFF6B6E75))
+          ? (null, AppColors.onDarkCard, AppColors.onDarkCardBorder)
           : (widget.surfaceFill ? c.su : null, c.ink, c.si),
-      ButtonVariant.danger => (c.danger, Colors.white, null),
+      ButtonVariant.danger => (c.danger, c.su, null),
     };
 
     final label = Text(

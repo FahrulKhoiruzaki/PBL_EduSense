@@ -12,17 +12,21 @@ import '../../../widgets/status_badge.dart';
 import '../data/admin_models.dart';
 import '../providers/admin_providers.dart';
 import '../widgets/admin_dialogs.dart';
+import 'academic_periods_screen.dart';
 import 'account_management_screen.dart';
 import 'activity_log_screen.dart';
 import 'admin_dashboard_screen.dart';
 import 'admin_settings_screen.dart';
 import 'class_management_screen.dart';
+import 'classification_admin_screen.dart';
 import 'cms_faq_contact_screen.dart';
 import 'cms_facilities_activities_screen.dart';
 import 'cms_home_text_screen.dart';
 import 'cms_posts_screen.dart';
 import 'calendar_admin_screen.dart';
 import 'class_info_admin_screen.dart';
+import 'grade_components_screen.dart';
+import 'subjects_screen.dart';
 
 const _desktopBreakpoint = 900.0;
 
@@ -224,13 +228,13 @@ class _SidebarGroup extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     child: Row(
                       children: [
-                        Icon(Icons.language, size: 20, color: containsActive ? c.ink : c.sl),
+                        Icon(Icons.language, size: 20, color: containsActive ? c.primary : c.sl),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             label,
                             style: context.styleMedium.copyWith(
-                              color: containsActive ? c.ink : c.sl,
+                              color: containsActive ? c.primary : c.sl,
                               fontWeight: containsActive ? FontWeight.w700 : null,
                             ),
                           ),
@@ -326,11 +330,11 @@ class _SidebarItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final foreground = selected ? c.su : c.sl;
+    final foreground = selected ? c.onPrimary : c.sl;
     return Padding(
       padding: EdgeInsets.only(bottom: 2, left: indent),
       child: Material(
-        color: selected ? c.ink : Colors.transparent,
+        color: selected ? c.primary : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -400,8 +404,13 @@ class _AdminContent extends ConsumerWidget {
     final menu = ref.watch(activeMenuProvider);
     final classCode = ref.watch(selectedClassCodeProvider);
 
-    // Layar Kelola Website memuat datanya sendiri; tidak ikut gagal bila dataset akun gagal dimuat.
+    // Layar Kelola Website dan layar akademik memuat datanya sendiri; tidak ikut gagal bila
+    // dataset akun gagal dimuat.
     final website = switch (menu) {
+      AdminMenu.periode => const AcademicPeriodsScreen(),
+      AdminMenu.mapel => const SubjectsScreen(),
+      AdminMenu.komponen => const GradeComponentsScreen(),
+      AdminMenu.klasifikasi => const ClassificationAdminScreen(),
       AdminMenu.webTeks => const CmsHomeTextScreen(),
       AdminMenu.webBerita => const CmsPostsScreen(),
       AdminMenu.webFasilitas => const CmsFacilitiesActivitiesScreen(),
@@ -484,6 +493,10 @@ extension AdminMenuIcon on AdminMenu {
   IconData get icon => switch (this) {
     AdminMenu.dashboard => Icons.dashboard_outlined,
     AdminMenu.kelas => Icons.school_outlined,
+    AdminMenu.periode => Icons.date_range_outlined,
+    AdminMenu.mapel => Icons.menu_book_outlined,
+    AdminMenu.komponen => Icons.fact_check_outlined,
+    AdminMenu.klasifikasi => Icons.bar_chart_outlined,
     AdminMenu.akun => Icons.people_outline,
     AdminMenu.log => Icons.history,
     AdminMenu.pengaturan => Icons.settings_outlined,

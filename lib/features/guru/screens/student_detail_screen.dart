@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../navigation/app_router.dart';
+import '../widgets/period_selector.dart';
 import '../../../core/theme.dart';
-import '../../../models/app_models.dart';
 import '../../../providers/app_providers.dart';
+import '../../../widgets/async_body.dart';
+import '../../../widgets/report_sections.dart';
 import '../../../widgets/avatar.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/custom_button.dart';
@@ -13,6 +15,8 @@ import '../../../widgets/status_badge.dart';
 import 'grades_screen.dart';
 import 'history_screen.dart';
 
+/// Detail akademik siswa. Semua angka berasal dari rapor backend pada periode terpilih; wali
+/// kelas melihat seluruh mapel, guru mapel hanya mapel yang diampu (dibatasi backend).
 class StudentDetailScreen extends ConsumerWidget {
   const StudentDetailScreen({super.key, required this.studentIndex});
 
@@ -23,9 +27,11 @@ class StudentDetailScreen extends ConsumerWidget {
     final cls = ref.watch(selectedClassProvider);
     final s = ref.watch(studentsProvider)[studentIndex];
     final isWali = ref.watch(isWaliProvider);
+    final key = (cls, s.id);
 
     return ScreenScaffold(
       title: 'Detail Siswa',
+      banner: ref.watch(waliBannerProvider),
       children: [
         CustomCard(
           child: Column(
@@ -35,66 +41,32 @@ class StudentDetailScreen extends ConsumerWidget {
               Text(s.name, style: context.styleH2),
               Text('Kelas $cls', style: context.styleMuted),
               const SizedBox(height: 8),
-              StatusBadge.classification(s.classification),
-            ],
-          ),
-        ),
-        TwoColumnGrid(
-          children: [
-            StatCard(label: 'Literasi', value: '${s.literasi}'),
-            StatCard(label: 'Numerasi', value: '${s.numerasi}'),
-            StatCard(
-              label: 'Kehadiran',
-              value: '${s.status == AttendanceStatus.alpa ? 78 : 93}%',
-            ),
-            StatCard(
-              label: 'Terlambat',
-              value: '${s.status == AttendanceStatus.terlambat ? 2 : 1}x',
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        CustomCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Kick('Perkembangan'),
-              Sparkline(
-                [
-                  s.literasi - 6,
-                  s.literasi - 4,
-                  s.literasi - 5,
-                  s.literasi - 2,
-                  s.literasi,
+              Wrap(
+                spacing: 8,
+                children: [
+                  StatusBadge.classification(s.classification),
+                  StatusBadge.attendance(s.status),
                 ],
-                height: 60,
               ),
+              Text('Kehadiran hari ini: ${s.status.label}${s.time.isEmpty ? '' : ' · ${s.time}'}',
+                  style: context.styleCaption),
             ],
           ),
         ),
-        CustomCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Kick('Kehadiran hari ini'),
-              StatusBadge.attendance(s.status),
-            ],
-          ),
-        ),
-        CustomCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Kick('Klasifikasi'),
-              StatusBadge.classification(s.classification),
-              const SizedBox(height: 8),
-              Text(
-                'Dasar penilaian: rata-rata literasi, rata-rata numerasi, kehadiran, keterlambatan, tren nilai. Diperbarui: 8 Oktober 2026. Klasifikasi adalah alat bantu, bukan penilaian akhir.',
-                style: context.styleCaption,
+        const PeriodSelector(),
+        ref.watch(studentReportProvider(key)).when(
+              loading: () => const LoadingList(count: 3),
+              error: (e, _) =>
+                  ErrorRetry(error: e, onRetry: () => ref.invalidate(studentReportProvider(key))),
+              data: (report) => StudentReportView(
+                report: report,
+                subjectsTitle:
+                    isWali ? 'Nilai seluruh mata pelajaran' : 'Nilai mata pelajaran yang Anda ampu',
+                noSubjectsMessage: isWali
+                    ? 'Belum ada mata pelajaran yang berlaku pada periode ini.'
+                    : 'Anda belum ditugaskan mengajar mata pelajaran di kelas ini.',
               ),
-            ],
-          ),
-        ),
+            ),
         Row(
           children: [
             if (!isWali) ...[
@@ -112,8 +84,7 @@ class StudentDetailScreen extends ConsumerWidget {
               child: CustomButton(
                 label: 'Riwayat Perkembangan',
                 expanded: true,
-                onPressed: () =>
-                    pushPage(context, HistoryScreen(studentIndex: studentIndex)),
+                onPressed: () => pushPage(context, HistoryScreen(studentIndex: studentIndex)),
               ),
             ),
           ],

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/network/api_client.dart';
 import '../features/orang_tua/data/parent_models.dart';
+import '../models/academic_models.dart';
 import '../models/app_models.dart';
 
 abstract interface class ParentRepository {
@@ -10,6 +11,12 @@ abstract interface class ParentRepository {
   Future<List<HariKehadiran>> fetchAttendance(int childId);
 
   Future<List<HistoryItem>> fetchHistory(int childId);
+
+  /// Semua periode akademik, terbaru dulu (filter tahun ajaran & semester).
+  Future<List<AcademicPeriod>> fetchPeriods();
+
+  /// Rapor anak; [periodId] null = periode aktif. Anak milik akun lain dijawab 404 oleh backend.
+  Future<StudentReport> fetchReport(int childId, {int? periodId});
 
   Future<List<ParentNotification>> fetchNotifications();
 
@@ -22,6 +29,8 @@ abstract final class ParentPaths {
   static const children = '/ortu/children';
   static String attendance(int id) => '/ortu/children/$id/attendance';
   static String history(int id) => '/ortu/children/$id/history';
+  static String report(int id) => '/ortu/children/$id/report';
+  static const periods = '/ortu/periods';
   static const notifications = '/ortu/notifications';
   static String notificationRead(int id) => '/ortu/notifications/$id/read';
   static const notificationsReadAll = '/ortu/notifications/read-all';
@@ -54,20 +63,20 @@ class ApiParentRepository implements ParentRepository {
   @override
   Future<List<HistoryItem>> fetchHistory(int childId) async {
     final rows = await _api.getList(ParentPaths.history(childId));
-    return [
-      for (final r in rows)
-        HistoryItem(
-          kind: switch (r['jenis']) {
-            'kehadiran' => HistoryKind.kehadiran,
-            'klasifikasi' => HistoryKind.klasifikasi,
-            _ => HistoryKind.nilai,
-          },
-          date: DateTime.parse(r['tanggal'] as String),
-          title: r['judul'] as String,
-          description: r['keterangan'] as String? ?? '',
-        ),
-    ]..sort((a, b) => b.date.compareTo(a.date));
+    return [for (final r in rows) historyItemFromJson(r)]..sort((a, b) => b.date.compareTo(a.date));
   }
+
+  @override
+  Future<List<AcademicPeriod>> fetchPeriods() async => [
+        for (final r in await _api.getList(ParentPaths.periods)) AcademicPeriod.fromJson(r),
+      ];
+
+  @override
+  Future<StudentReport> fetchReport(int childId, {int? periodId}) async =>
+      StudentReport.fromJson(await _api.getObject(
+        ParentPaths.report(childId),
+        query: periodId == null ? null : {'periode_id': periodId},
+      ));
 
   @override
   Future<List<ParentNotification>> fetchNotifications() async {
@@ -108,10 +117,7 @@ class ApiParentRepository implements ParentRepository {
       id: (json['id'] as num).toInt(),
       nama: json['nama'] as String,
       kelas: json['kelas'] as String,
-      klasifikasi: Classification.values.firstWhere(
-        (c) => c.label == json['klasifikasi'],
-        orElse: () => Classification.cukup,
-      ),
+      klasifikasi: classificationFromLabel(json['klasifikasi']),
       literasi: (json['literasi'] as num?)?.round() ?? 0,
       numerasi: (json['numerasi'] as num?)?.round() ?? 0,
       persenKehadiran: (json['persen_kehadiran'] as num?)?.round() ?? 0,
@@ -119,6 +125,7 @@ class ApiParentRepository implements ParentRepository {
       trenLiterasi: series('literasi'),
       trenNumerasi: series('numerasi'),
       trenKehadiran: series('kehadiran'),
+      trenTitik: TrendSet.fromJson(trend['titik']),
       riwayatKlasifikasi: [
         for (final r in (json['riwayat_klasifikasi'] as List<dynamic>? ?? const []))
           RiwayatKlasifikasi(
@@ -136,6 +143,7 @@ class ApiParentRepository implements ParentRepository {
       nis: json['nis'] as String?,
       waliKelas: json['wali_kelas'] as String?,
       tahunAjaran: json['tahun_ajaran'] as String?,
+      periode: json['periode'] as String?,
       diperbarui: json['diperbarui'] == null ? null : DateTime.parse(json['diperbarui'] as String),
     );
   }
@@ -144,9 +152,9 @@ class ApiParentRepository implements ParentRepository {
     final value = (json['nilai'] as num).round();
     return NilaiUjian(
       id: (json['id'] as num).toInt(),
-      kategori:
-          json['kategori'] == 'Numerasi' ? SubjectCategory.numerasi : SubjectCategory.literasi,
+      kategori: subjectCategoryFromLabel(json['kategori']),
       jenis: json['jenis_ujian'] as String,
+      mapel: json['mapel'] as String?,
       nilai: value,
       sebelumnya: (json['nilai_sebelumnya'] as num?)?.round() ?? value,
       tanggal: DateTime.parse(json['tanggal'] as String),
@@ -163,3 +171,15 @@ class ApiParentRepository implements ParentRepository {
 final parentRepositoryProvider = Provider<ParentRepository>(
   (ref) => ApiParentRepository(ref.watch(apiClientProvider)),
 );
+
+/// Satu baris riwayat (`RiwayatItemOut`); dipakai portal orang tua dan aplikasi guru.
+HistoryItem historyItemFromJson(Map<String, dynamic> r) => HistoryItem(
+      kind: switch (r['jenis']) {
+        'kehadiran' => HistoryKind.kehadiran,
+        'klasifikasi' => HistoryKind.klasifikasi,
+        _ => HistoryKind.nilai,
+      },
+      date: DateTime.parse(r['tanggal'] as String),
+      title: r['judul'] as String,
+      description: r['keterangan'] as String? ?? '',
+    );

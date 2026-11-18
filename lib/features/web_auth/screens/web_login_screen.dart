@@ -82,7 +82,7 @@ class TextLink extends StatelessWidget {
           text,
           style: context.styleCaption.copyWith(
             fontSize: 13,
-            color: context.colors.ink,
+            color: context.colors.primary,
             decoration: TextDecoration.underline,
           ),
         ),

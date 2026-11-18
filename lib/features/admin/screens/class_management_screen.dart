@@ -177,16 +177,17 @@ class _ClassDetailView extends ConsumerWidget {
                   onPressed: () => startAddMapel(context, code),
                 ),
               ),
-              if (kelas.mapelIds.isEmpty)
+              if (kelas.displayAssignments.isEmpty)
                 const EmptyState('Belum ada guru mapel.')
               else
                 RowList(
                   children: [
-                    for (final id in kelas.mapelIds)
+                    for (final a in kelas.displayAssignments)
                       _MapelRow(
-                        name: data.guruById(id)?.name ?? id,
-                        email: data.guruById(id)?.email ?? '',
-                        onRemove: () => startRemoveMapel(context, code, id),
+                        name: data.guruById(a.guruId)?.name ?? a.guruId,
+                        email: data.guruById(a.guruId)?.email ?? '',
+                        subject: a.subjectName,
+                        onRemove: () => startRemoveMapel(context, code, a),
                       ),
                   ],
                 ),
@@ -255,10 +256,18 @@ class _CardHeader extends StatelessWidget {
 }
 
 class _MapelRow extends StatelessWidget {
-  const _MapelRow({required this.name, required this.email, required this.onRemove});
+  const _MapelRow({
+    required this.name,
+    required this.email,
+    required this.subject,
+    required this.onRemove,
+  });
 
   final String name;
   final String email;
+
+  /// Null = penugasan lama tanpa mapel (belum dapat memasukkan nilai).
+  final String? subject;
   final VoidCallback onRemove;
 
   @override
@@ -272,6 +281,10 @@ class _MapelRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name, style: context.styleBold),
+                Text(
+                  subject ?? 'Mapel belum ditetapkan · belum dapat memasukkan nilai',
+                  style: context.styleBody,
+                ),
                 Text(email, style: context.styleAdminCaption),
               ],
             ),
