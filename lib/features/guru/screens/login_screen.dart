@@ -37,7 +37,25 @@ class _Monogram extends StatelessWidget {
 }
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({
+    super.key,
+    this.initialRole = TeacherRole.waliKelas,
+    this.allowRoleSwitch = true,
+    this.onAuthenticated,
+    this.onCancel,
+  });
+
+  /// Peran awal untuk form login. Aplikasi guru tetap menampilkan toggle peran.
+  final TeacherRole initialRole;
+
+  /// Website dapat mengunci peran yang dipilih dari halaman pemilihan role.
+  final bool allowRoleSwitch;
+
+  /// Dipanggil setelah kredensial guru diterima oleh provider.
+  final VoidCallback? onAuthenticated;
+
+  /// Aksi kembali opsional, hanya ditampilkan pada flow website.
+  final VoidCallback? onCancel;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -46,13 +64,19 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
-  var _role = TeacherRole.waliKelas;
+  late TeacherRole _role;
   var _obscure = true;
   var _remember = false;
   var _busy = false;
   String? _emailError;
   String? _passwordError;
   String? _banner;
+
+  @override
+  void initState() {
+    super.initState();
+    _role = widget.initialRole;
+  }
 
   @override
   void dispose() {
@@ -67,6 +91,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       });
 
   Future<void> _submit() async {
+    if (_busy) return;
     final email = _email.text.trim().toLowerCase();
     final password = _password.text;
     setState(() {
@@ -81,6 +106,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         .read(sessionProvider.notifier)
         .signIn(email: email, password: password, role: _role);
     if (!mounted) return;
+    if (error == null) {
+      widget.onAuthenticated?.call();
+      return;
+    }
     setState(() {
       _busy = false;
       _banner = error;
@@ -100,38 +129,51 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               padding: const EdgeInsets.fromLTRB(16, 40, 16, 24),
               children: [
                 const Align(alignment: Alignment.centerLeft, child: _Monogram()),
-                Text('Masuk', style: context.styleH1),
+                Text(
+                  widget.allowRoleSwitch
+                      ? 'Masuk'
+                      : 'Login ${_role == TeacherRole.waliKelas ? 'Wali Kelas' : 'Guru Mapel'}',
+                  style: context.styleH1,
+                ),
                 const SizedBox(height: 4),
                 Text(
                   'Pantau perkembangan belajar siswa dengan lebih mudah.',
                   style: context.styleMuted,
                 ),
-                const FieldLabel('Masuk sebagai'),
-                Row(
-                  children: [
-                    Expanded(
-                      child: CustomButton(
-                        label: 'Wali Kelas',
-                        expanded: true,
-                        variant: _role == TeacherRole.waliKelas
-                            ? ButtonVariant.primary
-                            : ButtonVariant.outline,
-                        onPressed: () => _setRole(TeacherRole.waliKelas),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: CustomButton(
-                        label: 'Guru Mapel',
-                        expanded: true,
-                        variant: _role == TeacherRole.guruMapel
-                            ? ButtonVariant.primary
-                            : ButtonVariant.outline,
-                        onPressed: () => _setRole(TeacherRole.guruMapel),
-                      ),
-                    ),
-                  ],
+                Text(
+                  widget.allowRoleSwitch
+                      ? 'Masuk sebagai'
+                      : 'Masuk sebagai ${_role == TeacherRole.waliKelas ? 'Wali Kelas' : 'Guru Mapel'}',
+                  style: context.styleBold,
                 ),
+                if (widget.allowRoleSwitch) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CustomButton(
+                          label: 'Wali Kelas',
+                          expanded: true,
+                          variant: _role == TeacherRole.waliKelas
+                              ? ButtonVariant.primary
+                              : ButtonVariant.outline,
+                          onPressed: () => _setRole(TeacherRole.waliKelas),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: CustomButton(
+                          label: 'Guru Mapel',
+                          expanded: true,
+                          variant: _role == TeacherRole.guruMapel
+                              ? ButtonVariant.primary
+                              : ButtonVariant.outline,
+                          onPressed: () => _setRole(TeacherRole.guruMapel),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 LabeledField(
                   label: 'Email',
                   controller: _email,
@@ -189,6 +231,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   expanded: true,
                   onPressed: _busy ? null : _submit,
                 ),
+                if (widget.onCancel != null) ...[
+                  const SizedBox(height: 8),
+                  CustomButton(
+                    label: 'Kembali ke Pilihan Role',
+                    variant: ButtonVariant.outline,
+                    expanded: true,
+                    onPressed: _busy ? null : widget.onCancel,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Text(
                   'Akun dibuat oleh admin sekolah. Data siswa hanya untuk keperluan sekolah.',
@@ -272,7 +323,9 @@ class ForgotPasswordScreen extends StatelessWidget {
 }
 
 class ChangePasswordScreen extends ConsumerStatefulWidget {
-  const ChangePasswordScreen({super.key});
+  const ChangePasswordScreen({super.key, this.onSignOut});
+
+  final VoidCallback? onSignOut;
 
   @override
   ConsumerState<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
@@ -356,6 +409,15 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                   expanded: true,
                   onPressed: _busy ? null : _submit,
                 ),
+                if (widget.onSignOut != null) ...[
+                  const SizedBox(height: 8),
+                  CustomButton(
+                    label: 'Batal dan Keluar',
+                    variant: ButtonVariant.outline,
+                    expanded: true,
+                    onPressed: _busy ? null : widget.onSignOut,
+                  ),
+                ],
               ],
             ),
           ),
