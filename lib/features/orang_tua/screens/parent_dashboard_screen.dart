@@ -104,6 +104,10 @@ class ParentDashboardScreen extends ConsumerWidget {
                 runSpacing: 8,
                 children: [
                   CustomButton(
+                    label: 'Lihat Rapor',
+                    onPressed: () => nav.openSubPage(ParentSubPage.rapor),
+                  ),
+                  CustomButton(
                     label: 'Lihat Statistik',
                     onPressed: () => nav.openSubPage(ParentSubPage.statistik),
                   ),

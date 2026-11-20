@@ -1,4 +1,4 @@
-import 'package:aplikasi_guru/core/whatsapp.dart';
+import 'package:edu_sense/core/whatsapp.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

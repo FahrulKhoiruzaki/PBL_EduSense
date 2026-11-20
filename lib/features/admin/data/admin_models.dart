@@ -74,13 +74,39 @@ class AdminUser extends AdminAccount {
   });
 }
 
+/// Penugasan guru mengajar satu mapel di satu kelas. [subjectId] null = penugasan lama tanpa
+/// mapel: guru boleh mencatat absensi tetapi belum boleh memasukkan nilai.
+@immutable
+class MapelAssignment {
+  const MapelAssignment({required this.guruId, this.subjectId, this.subjectName});
+
+  final String guruId;
+  final int? subjectId;
+  final String? subjectName;
+}
+
 @immutable
 class Kelas {
-  const Kelas({required this.code, this.waliId, this.mapelIds = const []});
+  const Kelas({
+    required this.code,
+    this.waliId,
+    this.mapelIds = const [],
+    this.assignments = const [],
+  });
 
   final String code;
   final String? waliId;
+
+  /// Guru mapel (unik) di kelas ini.
   final List<String> mapelIds;
+  final List<MapelAssignment> assignments;
+
+  /// Jenjang kelas dari kodenya ('5A' -> 5).
+  int get level => int.tryParse(code.isEmpty ? '' : code[0]) ?? 0;
+
+  List<MapelAssignment> get displayAssignments => assignments.isNotEmpty
+      ? assignments
+      : [for (final id in mapelIds) MapelAssignment(guruId: id)];
 }
 
 @immutable
@@ -104,6 +130,7 @@ class AdminDataset {
     required this.log,
     required this.academicYear,
     required this.lateLimit,
+    this.activePeriod,
   });
 
   static const empty = AdminDataset(
@@ -123,6 +150,9 @@ class AdminDataset {
   final List<LogAktivitas> log;
   final String academicYear;
   final String lateLimit;
+
+  /// Label periode akademik aktif; bila ada, tahun ajaran mengikuti periode ini.
+  final String? activePeriod;
 
   List<String> get classCodes => classes.keys.toList()..sort();
 

@@ -16,6 +16,7 @@ import 'parent_grades_screen.dart';
 import 'parent_history_screen.dart';
 import 'parent_notifications_screen.dart';
 import 'parent_profile_screen.dart';
+import 'parent_report_screen.dart';
 import 'parent_stats_screen.dart';
 
 const _desktopBreakpoint = 900.0;
@@ -95,7 +96,7 @@ class _ParentBottomBar extends ConsumerWidget {
       decoration: BoxDecoration(border: Border(top: BorderSide(color: c.mi))),
       child: BottomNavigationBar(
         currentIndex: tab.index,
-        selectedItemColor: highlightTab ? c.ink : c.st,
+        selectedItemColor: highlightTab ? c.primary : c.st,
         selectedLabelStyle: highlightTab ? null : Theme.of(context).bottomNavigationBarTheme.unselectedLabelStyle,
         onTap: (i) {
           if (i == ParentTab.values.length) {
@@ -131,6 +132,7 @@ class _ParentSidebar extends ConsumerWidget {
 
     final items = <(String, bool, VoidCallback)>[
       ('Dashboard', subPage == null && tab == ParentTab.beranda, () => nav.openTab(ParentTab.beranda)),
+      ('Rapor Akademik', subPage == ParentSubPage.rapor, () => nav.openSubPage(ParentSubPage.rapor)),
       ('Profil Anak', subPage == ParentSubPage.profil, () => nav.openSubPage(ParentSubPage.profil)),
       ('Statistik', subPage == ParentSubPage.statistik, () => nav.openSubPage(ParentSubPage.statistik)),
       ('Nilai', subPage == null && tab == ParentTab.nilai, () => nav.openTab(ParentTab.nilai)),
@@ -173,6 +175,7 @@ class _ParentContent extends ConsumerWidget {
     final gradeId = ref.watch(selectedGradeIdProvider);
 
     final Widget body = switch (subPage) {
+      ParentSubPage.rapor => const ParentReportScreen(),
       ParentSubPage.profil => const ParentProfileScreen(),
       ParentSubPage.statistik => const ParentStatsScreen(),
       ParentSubPage.notifikasi => const ParentNotificationsScreen(),
@@ -248,7 +251,7 @@ class _TopBar extends ConsumerWidget {
               child: Container(
                 width: 8,
                 height: 8,
-                decoration: BoxDecoration(color: c.ink, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle),
               ),
             ),
         ],

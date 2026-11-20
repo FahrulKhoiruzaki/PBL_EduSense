@@ -246,7 +246,7 @@ class _DayCell extends StatelessWidget {
             child: Ink(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
-                border: selected ? Border.all(color: c.ink, width: 2) : null,
+                border: selected ? Border.all(color: c.primary, width: 2) : null,
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,

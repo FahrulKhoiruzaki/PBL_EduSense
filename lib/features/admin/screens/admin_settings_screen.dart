@@ -133,6 +133,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
       }),
     );
     final years = academicYearOptions(_year);
+    final activePeriod = ref.watch(adminDatasetProvider.select((d) => d.activePeriod));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -143,14 +144,22 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
           equalHeight: false,
           children: [
             _card('Data sekolah', [
-              LabeledDropdown<String>(
-                key: ValueKey(_year),
-                label: 'Tahun ajaran',
-                value: years.contains(_year) ? _year : years[1],
-                items: years,
-                itemLabel: (v) => v,
-                onChanged: (v) => _year = v,
-              ),
+              if (activePeriod != null) ...[
+                const FieldLabel('Tahun ajaran'),
+                Text(_year, style: context.styleBold),
+                Text(
+                  'Mengikuti periode aktif ($activePeriod). Ubah lewat menu Periode Akademik.',
+                  style: context.styleAdminCaption,
+                ),
+              ] else
+                LabeledDropdown<String>(
+                  key: ValueKey(_year),
+                  label: 'Tahun ajaran',
+                  value: years.contains(_year) ? _year : years[1],
+                  items: years,
+                  itemLabel: (v) => v,
+                  onChanged: (v) => _year = v,
+                ),
               LabeledField(
                 label: 'Batas jam terlambat',
                 controller: _lateLimit,

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/clock.dart';
 import '../../../core/theme.dart';
+import '../../../models/academic_models.dart';
+import '../../../widgets/axis_chart.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/custom_card.dart';
 import '../../../widgets/responsive_grid.dart';
@@ -16,11 +19,52 @@ class ParentStatsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final kid = ref.watch(selectedKidProvider);
     final period = ref.watch(statsPeriodProvider);
+    final today = ref.watch(todayProvider);
+    final where = kid.periode ?? 'semua data (periode belum ditetapkan sekolah)';
+    List<ChartPoint> pts(List<TrendPoint> p) => weeklyChartPoints(pointsIn(p, period, today));
+    final range = period == StatsPeriod.bulan ? 'bulan ini' : 'periode ini';
 
-    final charts = <(String, List<int>, String)>[
-      ('Literasi', kid.trenLiterasi, 'Garis naik berarti nilai membaik.'),
-      ('Numerasi', kid.trenNumerasi, 'Garis datar berarti nilai stabil.'),
-      ('Kehadiran (%)', kid.trenKehadiran, 'Semakin tinggi, semakin sering hadir.'),
+    final charts = [
+      ChartPanel(
+        title: 'Literasi',
+        description:
+            'Rata-rata nilai Literasi ${kid.nama} per minggu pada $where. Sumbu X = minggu '
+            'penilaian, sumbu Y = nilai 0–100. Garis naik berarti nilai minggu itu lebih tinggi, '
+            'bukan berarti seluruh kemampuan membaik.',
+        points: pts(kid.trenTitik.literasi),
+        xTitle: 'Minggu (tanggal awal)',
+        yTitle: 'Nilai rata-rata',
+        countLabel: 'nilai',
+        emptyMessage: 'Belum ada nilai Literasi $range.',
+        card: false,
+      ),
+      ChartPanel(
+        title: 'Numerasi',
+        description:
+            'Rata-rata nilai Numerasi ${kid.nama} per minggu pada $where. Sumbu X = minggu '
+            'penilaian, sumbu Y = nilai 0–100.',
+        points: pts(kid.trenTitik.numerasi),
+        xTitle: 'Minggu (tanggal awal)',
+        yTitle: 'Nilai rata-rata',
+        countLabel: 'nilai',
+        emptyMessage: 'Belum ada nilai Numerasi $range.',
+        tone: ChartTone.numerasi,
+        card: false,
+      ),
+      ChartPanel(
+        title: 'Kehadiran',
+        description:
+            'Persentase hari Hadir/Terlambat dari hari tercatat per minggu pada $where. '
+            'Sumbu Y = persentase (%).',
+        points: pts(kid.trenTitik.attendance),
+        xTitle: 'Minggu (tanggal awal)',
+        yTitle: 'Kehadiran (%)',
+        unit: '%',
+        countLabel: 'hari tercatat',
+        tone: ChartTone.attendance,
+        emptyMessage: 'Belum ada catatan kehadiran $range.',
+        card: false,
+      ),
     ];
 
     return Column(
@@ -39,20 +83,8 @@ class ParentStatsScreen extends ConsumerWidget {
           minItemWidth: 320,
           equalHeight: false,
           children: [
-            for (final (title, values, hint) in charts)
-              CustomCard(
-                margin: EdgeInsets.zero,
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Kick(title),
-                    ParentLineChart(lastPoints(values, period.points)),
-                    const SizedBox(height: 6),
-                    Text(hint, style: context.styleCaption.copyWith(fontSize: 13)),
-                  ],
-                ),
-              ),
+            for (final chart in charts)
+              CustomCard(margin: EdgeInsets.zero, padding: const EdgeInsets.all(18), child: chart),
             CustomCard(
               margin: EdgeInsets.zero,
               padding: const EdgeInsets.all(18),

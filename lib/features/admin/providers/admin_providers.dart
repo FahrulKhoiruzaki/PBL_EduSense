@@ -11,6 +11,10 @@ export 'admin_data_provider.dart';
 enum AdminMenu {
   dashboard('Dashboard'),
   kelas('Struktur Kelas'),
+  periode('Periode Akademik'),
+  mapel('Mata Pelajaran'),
+  komponen('Komponen Penilaian'),
+  klasifikasi('Klasifikasi Siswa'),
   akun('Manajemen Akun'),
   log('Log Aktivitas'),
   pengaturan('Pengaturan', hidden: true),

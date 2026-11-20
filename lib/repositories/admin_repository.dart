@@ -21,9 +21,11 @@ abstract interface class AdminRepository {
 
   Future<void> setWali(String code, String guruId);
 
-  Future<void> addMapel(String code, String guruId);
+  /// [subjectId] = mata pelajaran yang diajarkan; menentukan hak input nilai guru.
+  Future<void> addMapel(String code, String guruId, {int? subjectId});
 
-  Future<void> removeMapel(String code, String guruId);
+  /// Tanpa [subjectId]: melepas semua penugasan guru itu di kelas tersebut.
+  Future<void> removeMapel(String code, String guruId, {int? subjectId});
 
   Future<void> moveStudents(List<String> studentIds, String targetClass);
 
@@ -197,6 +199,14 @@ class ApiAdminRepository implements AdminRepository {
             code: r['kode'] as String,
             waliId: r['wali_id'] == null ? null : '${r['wali_id']}',
             mapelIds: [for (final id in (r['mapel_ids'] as List<dynamic>? ?? const [])) '$id'],
+            assignments: [
+              for (final a in (r['penugasan'] as List<dynamic>? ?? const []))
+                MapelAssignment(
+                  guruId: '${(a as Map<String, dynamic>)['guru_id']}',
+                  subjectId: (a['mapel_id'] as num?)?.toInt(),
+                  subjectName: a['mapel'] as String?,
+                ),
+            ],
           ),
       },
       log: [
@@ -212,6 +222,7 @@ class ApiAdminRepository implements AdminRepository {
       ]..sort((a, b) => b.time.compareTo(a.time)),
       academicYear: settings['tahun_ajaran'] as String? ?? '',
       lateLimit: settings['batas_jam_terlambat'] as String? ?? '',
+      activePeriod: settings['periode_aktif'] as String?,
     );
   }
 
@@ -231,13 +242,17 @@ class ApiAdminRepository implements AdminRepository {
   }
 
   @override
-  Future<void> addMapel(String code, String guruId) async {
-    await _api.post(AdminPaths.classMapel(code), body: {'guru_id': guruId});
+  Future<void> addMapel(String code, String guruId, {int? subjectId}) async {
+    await _api.post(
+      AdminPaths.classMapel(code),
+      body: {'guru_id': guruId, 'mapel_id': subjectId},
+    );
   }
 
   @override
-  Future<void> removeMapel(String code, String guruId) async {
-    await _api.delete(AdminPaths.classMapelGuru(code, guruId));
+  Future<void> removeMapel(String code, String guruId, {int? subjectId}) async {
+    final path = AdminPaths.classMapelGuru(code, guruId);
+    await _api.delete(subjectId == null ? path : '$path?mapel_id=$subjectId');
   }
 
   @override

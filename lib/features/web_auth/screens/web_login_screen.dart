@@ -82,7 +82,7 @@ class TextLink extends StatelessWidget {
           text,
           style: context.styleCaption.copyWith(
             fontSize: 13,
-            color: context.colors.ink,
+            color: context.colors.primary,
             decoration: TextDecoration.underline,
           ),
         ),
@@ -92,9 +92,10 @@ class TextLink extends StatelessWidget {
 }
 
 class WebLoginScreen extends ConsumerStatefulWidget {
-  const WebLoginScreen({super.key, required this.role});
+  const WebLoginScreen({super.key, required this.role, this.returnLabel});
 
   final WebRole role;
+  final String? returnLabel;
 
   @override
   ConsumerState<WebLoginScreen> createState() => _WebLoginScreenState();
@@ -187,7 +188,9 @@ class _WebLoginScreenState extends ConsumerState<WebLoginScreen> {
             TextLink(
               'Lupa password?',
               onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const WebForgotPasswordScreen()),
+                MaterialPageRoute<void>(
+                  builder: (_) => const WebForgotPasswordScreen(),
+                ),
               ),
             ),
           TextLink(
@@ -196,7 +199,8 @@ class _WebLoginScreenState extends ConsumerState<WebLoginScreen> {
           ),
         ],
       ),
-      if (_banner != null) InfoBanner(_banner!, margin: const EdgeInsets.only(top: 10)),
+      if (_banner != null)
+        InfoBanner(_banner!, margin: const EdgeInsets.only(top: 10)),
       const SizedBox(height: 16),
       CustomButton(
         label: _busy ? 'Memuat…' : 'Masuk',
@@ -205,7 +209,7 @@ class _WebLoginScreenState extends ConsumerState<WebLoginScreen> {
       ),
       const SizedBox(height: 8),
       CustomButton(
-        label: 'Kembali ke Website',
+        label: widget.returnLabel ?? 'Kembali ke Website',
         variant: ButtonVariant.outline,
         expanded: true,
         onPressed: () => Navigator.of(context).pop(),

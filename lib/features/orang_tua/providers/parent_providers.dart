@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/value_state.dart';
+import '../../../models/academic_models.dart';
 import '../../../models/app_models.dart';
 import '../../../repositories/parent_repository.dart';
 import '../data/parent_models.dart';
@@ -20,6 +21,7 @@ enum ParentTab {
 }
 
 enum ParentSubPage {
+  rapor('Rapor Akademik'),
   profil('Profil Anak'),
   statistik('Statistik'),
   notifikasi('Notifikasi');
@@ -28,17 +30,25 @@ enum ParentSubPage {
   final String label;
 }
 
+/// Rentang grafik statistik. Data berasal dari periode akademik aktif (maks. 12 minggu terakhir
+/// yang punya data); "Bulan ini" hanya menampilkan minggu yang beririsan dengan bulan berjalan.
 enum StatsPeriod {
-  semester('Semester ini', 9),
-  bulan('Bulan ini', 3);
+  semester('Periode aktif'),
+  bulan('Bulan ini');
 
-  const StatsPeriod(this.label, this.points);
+  const StatsPeriod(this.label);
   final String label;
-  final int points;
 }
 
-List<int> lastPoints(List<int> values, int count) =>
-    values.length > count ? values.sublist(values.length - count) : values;
+List<TrendPoint> pointsIn(List<TrendPoint> points, StatsPeriod period, DateTime today) {
+  if (period == StatsPeriod.semester) return points;
+  final first = DateTime(today.year, today.month);
+  final next = DateTime(today.year, today.month + 1);
+  return [
+    for (final p in points)
+      if (!p.weekEnd.isBefore(first) && p.weekStart.isBefore(next)) p,
+  ];
+}
 
 final anakListProvider = FutureProvider<List<Anak>>(
   (ref) => ref.watch(parentRepositoryProvider).fetchChildren(),
@@ -63,6 +73,22 @@ final selectedKidProvider = Provider<Anak>((ref) {
   final list = ref.watch(anakListProvider).requireValue;
   final index = ref.watch(selectedKidIndexProvider);
   return list[math.min(index, list.length - 1)];
+});
+
+final parentPeriodsProvider = FutureProvider<List<AcademicPeriod>>(
+  (ref) => ref.watch(parentRepositoryProvider).fetchPeriods(),
+);
+
+/// Periode rapor yang dipilih; null = periode aktif.
+final reportPeriodProvider = NotifierProvider<ValueState<int?>, int?>(() => ValueState(null));
+
+/// Rapor anak yang sedang dipilih pada periode terpilih (berganti otomatis saat anak/periode
+/// berganti, sehingga data anak sebelumnya tidak tertinggal).
+final childReportProvider = FutureProvider.autoDispose<StudentReport>((ref) {
+  final kid = ref.watch(selectedKidProvider);
+  return ref
+      .watch(parentRepositoryProvider)
+      .fetchReport(kid.id, periodId: ref.watch(reportPeriodProvider));
 });
 
 final statsPeriodProvider = NotifierProvider<ValueState<StatsPeriod>, StatsPeriod>(
@@ -197,7 +223,7 @@ final filteredGradesProvider = Provider.autoDispose<List<NilaiUjian>>((ref) {
   return [
     for (final g in kid.nilai)
       if ((category == null || g.kategori == category) &&
-          '${g.jenis}${g.kategori.label}'.toLowerCase().contains(query))
+          '${g.jenis}${g.mapelLabel}'.toLowerCase().contains(query))
         g,
   ];
 });

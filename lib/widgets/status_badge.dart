@@ -66,16 +66,19 @@ class StatusBadge extends StatelessWidget {
   factory StatusBadge.attendance(AttendanceStatus status) =>
       StatusBadge(label: status.label, icon: status.icon);
 
-  factory StatusBadge.classification(Classification classification) =>
-      StatusBadge(
-        label: classification.label,
-        icon: classification.icon,
-        variant: switch (classification) {
-          Classification.mahir => BadgeVariant.mahir,
-          Classification.cukup => BadgeVariant.cukup,
-          Classification.perlu => BadgeVariant.perlu,
-        },
-      );
+  /// Null = belum diklasifikasi pada periode ini (data belum lengkap atau aturan belum ada).
+  factory StatusBadge.classification(Classification? classification) =>
+      classification == null
+          ? const StatusBadge(label: 'Belum diklasifikasi')
+          : StatusBadge(
+              label: classification.label,
+              icon: classification.icon,
+              variant: switch (classification) {
+                Classification.mahir => BadgeVariant.mahir,
+                Classification.cukup => BadgeVariant.cukup,
+                Classification.perlu => BadgeVariant.perlu,
+              },
+            );
 
   final String label;
   final IconData? icon;
@@ -84,7 +87,7 @@ class StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final foreground = variant == BadgeVariant.mahir ? c.su : c.ink;
+    final foreground = variant == BadgeVariant.mahir ? c.onPrimary : c.ink;
 
     Widget content = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
@@ -104,7 +107,7 @@ class StatusBadge extends StatelessWidget {
       content = ClipRRect(
         borderRadius: BorderRadius.circular(99),
         child: CustomPaint(
-          painter: StripePainter(base: c.mi, stripe: c.si, period: 5),
+          painter: StripePainter(base: c.amber.withAlpha(40), stripe: c.amber.withAlpha(110), period: 5),
           child: content,
         ),
       );
@@ -112,11 +115,17 @@ class StatusBadge extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: variant == BadgeVariant.mahir ? c.ink : null,
+        color: variant == BadgeVariant.mahir ? c.primary : null,
         borderRadius: BorderRadius.circular(99),
         border: variant == BadgeVariant.mahir
             ? Border.all(color: Colors.transparent)
-            : Border.all(color: variant == BadgeVariant.cukup ? c.ink : c.si),
+            : Border.all(
+                color: switch (variant) {
+                  BadgeVariant.cukup => c.lavender,
+                  BadgeVariant.perlu => c.amber,
+                  _ => c.si,
+                },
+              ),
       ),
       child: content,
     );

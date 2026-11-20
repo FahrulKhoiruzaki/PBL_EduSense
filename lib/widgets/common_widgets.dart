@@ -262,7 +262,7 @@ class FilterChips extends StatelessWidget {
           children: [
             for (final (value, label) in options) ...[
               Material(
-                color: selected == value ? c.ink : c.mi,
+                color: selected == value ? c.primary : c.mi,
                 borderRadius: BorderRadius.circular(99),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
@@ -276,7 +276,7 @@ class FilterChips extends StatelessWidget {
                         child: Text(
                           label,
                           style: context.styleBody.copyWith(
-                            color: selected == value ? c.su : c.ink,
+                            color: selected == value ? c.onPrimary : c.ink,
                           ),
                         ),
                       ),
@@ -388,7 +388,7 @@ class ProgressBar extends StatelessWidget {
               Positioned.fill(child: ColoredBox(color: c.mi)),
               FractionallySizedBox(
                 widthFactor: (percent / 100).clamp(0, 1),
-                child: ColoredBox(color: c.ink, child: const SizedBox.expand()),
+                child: ColoredBox(color: c.primary, child: const SizedBox.expand()),
               ),
             ],
           ),
@@ -407,10 +407,10 @@ class DistributionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final fills = <Classification, Widget>{
-      Classification.mahir: ColoredBox(color: c.ink),
-      Classification.cukup: ColoredBox(color: c.si),
+      Classification.mahir: ColoredBox(color: c.primary),
+      Classification.cukup: ColoredBox(color: c.lavender),
       Classification.perlu: CustomPaint(
-        painter: StripePainter(base: c.mi, stripe: c.st, period: 4),
+        painter: StripePainter(base: c.amber.withAlpha(90), stripe: c.amber, period: 4),
       ),
     };
     final segments = [
@@ -495,6 +495,7 @@ class FiveStats extends StatelessWidget {
   }
 }
 
+/// Indikator tren ringkas tanpa sumbu (untuk kartu kecil). Grafik lengkap: `ChartPanel`.
 class Sparkline extends StatelessWidget {
   const Sparkline(this.values, {super.key, this.height = 56});
 
@@ -510,7 +511,7 @@ class Sparkline extends StatelessWidget {
     return AspectRatio(
       aspectRatio: 300 / height,
       child: CustomPaint(
-        painter: _SparklinePainter(values: values, height: height, line: c.ink, base: c.si),
+        painter: _SparklinePainter(values: values, height: height, line: c.primary, base: c.si),
       ),
     );
   }
@@ -541,15 +542,13 @@ class _SparklinePainter extends CustomPainter {
         ..strokeWidth = 1,
     );
 
-    final maxV = values.reduce((a, b) => a > b ? a : b);
-    final minV = values.reduce((a, b) => a < b ? a : b);
-    final range = maxV == minV ? 1 : maxV - minV;
+    // Skala tetap 0–100 (nilai dan persen): selisih kecil tidak dibesar-besarkan.
     final steps = values.length > 1 ? values.length - 1 : 1;
     final points = [
       for (var i = 0; i < values.length; i++)
         Offset(
-          6 + i * 288 / steps,
-          height - 6 - (values[i] - minV) / range * (height - 14),
+          values.length == 1 ? 150 : 6 + i * 288 / steps,
+          height - 6 - values[i].clamp(0, 100) / 100 * (height - 14),
         ),
     ];
 
@@ -744,7 +743,7 @@ void showClassPicker(BuildContext context) {
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    barrierColor: const Color(0x8016171A),
+    barrierColor: const Color(0x8029272D),
     constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.88),
     builder: (_) => const _ClassPickerSheet(),
   );
@@ -818,7 +817,7 @@ class _ClassPickerRow extends StatelessWidget {
               SizedBox(
                 width: 28,
                 child: selected
-                    ? Icon(Icons.check, size: 18, color: context.colors.ink)
+                    ? Icon(Icons.check, size: 18, color: context.colors.primary)
                     : null,
               ),
             ],

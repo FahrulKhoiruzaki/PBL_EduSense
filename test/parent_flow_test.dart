@@ -1,9 +1,9 @@
-import 'package:aplikasi_guru/core/network/api_exception.dart';
-import 'package:aplikasi_guru/features/orang_tua/providers/parent_providers.dart';
-import 'package:aplikasi_guru/features/orang_tua/screens/parent_main_layout.dart';
-import 'package:aplikasi_guru/models/app_models.dart';
-import 'package:aplikasi_guru/repositories/parent_repository.dart';
-import 'package:aplikasi_guru/widgets/sidebar_parts.dart';
+import 'package:edu_sense/core/network/api_exception.dart';
+import 'package:edu_sense/features/orang_tua/providers/parent_providers.dart';
+import 'package:edu_sense/features/orang_tua/screens/parent_main_layout.dart';
+import 'package:edu_sense/models/app_models.dart';
+import 'package:edu_sense/repositories/parent_repository.dart';
+import 'package:edu_sense/widgets/sidebar_parts.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -58,6 +58,9 @@ void main() {
     await t.tap(find.text('Lihat Statistik'));
     await t.pumpAndSettle();
     expect(find.text('Riwayat klasifikasi'), findsOneWidget);
+    // Anak kedua (Aisyah) belum punya titik tren: grafik anak pertama tidak boleh ikut tampil.
+    expect(find.textContaining('Terbaru: 82'), findsNothing);
+    expect(find.text('Belum ada nilai Literasi periode ini.'), findsOneWidget);
     await t.tap(find.text('Bulan ini'));
     await t.pumpAndSettle();
     expect(container.read(statsPeriodProvider), StatsPeriod.bulan);
