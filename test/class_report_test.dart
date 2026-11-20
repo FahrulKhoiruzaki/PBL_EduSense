@@ -88,7 +88,7 @@ Future<FakeGuruRepository> _boot(WidgetTester t, {required String role, required
   ));
   await t.pumpAndSettle();
   await t.tap(find.text(role));
-  await t.pump();
+  await t.pumpAndSettle();
   await t.enterText(find.byType(TextField).at(0), email);
   await t.enterText(find.byType(TextField).at(1), 'Guru12345');
   await t.tap(find.text('Masuk').last);

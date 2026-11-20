@@ -3,8 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme.dart';
 import 'providers/app_providers.dart';
+import 'features/admin/screens/admin_main_layout.dart';
 import 'features/guru/screens/login_screen.dart';
 import 'features/guru/screens/main_layout.dart';
+import 'features/guru/screens/native_role_selection_screen.dart';
+import 'features/web_auth/providers/web_session_provider.dart';
+import 'features/web_auth/screens/web_change_password_screen.dart';
+import 'features/web_auth/data/web_auth_models.dart';
 import 'widgets/app_overlays.dart';
 
 void main() {
@@ -44,15 +49,35 @@ class _AuthGate extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final boot = ref.watch(sessionBootstrapProvider);
     final status = ref.watch(sessionProvider.select((s) => s.status));
+    final webSession = ref.watch(webSessionProvider);
+
+    void signOutTeacher() {
+      ref.read(sessionProvider.notifier).signOut();
+    }
+
+    void signOutWeb() {
+      ref.read(webSessionProvider.notifier).signOut();
+    }
+
+    // Keep the existing teacher flow authoritative when both session families
+    // observe the shared token storage, as WebShell does for the website.
+    if (status == AuthStatus.mustChangePassword) {
+      return ChangePasswordScreen(onSignOut: signOutTeacher);
+    }
+    if (status == AuthStatus.signedIn) return const MainLayout();
+
+    if (webSession.status == WebAuthStatus.mustChangePassword) {
+      return const WebChangePasswordScreen();
+    }
+    if (webSession.status == WebAuthStatus.signedIn &&
+        webSession.role == WebRole.admin) {
+      return AdminMainLayout(onLogout: signOutWeb);
+    }
 
     if (status == AuthStatus.signedOut && boot.isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    return switch (status) {
-      AuthStatus.signedOut => const LoginScreen(),
-      AuthStatus.mustChangePassword => const ChangePasswordScreen(),
-      AuthStatus.signedIn => const MainLayout(),
-    };
+    return const NativeRoleSelectionScreen();
   }
 }

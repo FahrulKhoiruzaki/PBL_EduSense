@@ -26,7 +26,7 @@ Future<FakeGuruRepository> _boot(WidgetTester t, {FakeGuruRepository? guru}) asy
   ));
   await t.pumpAndSettle();
   await t.tap(find.text('Guru Mapel'));
-  await t.pump();
+  await t.pumpAndSettle();
   await t.enterText(find.byType(TextField).at(0), 'pak.andi@contoh.id');
   await t.enterText(find.byType(TextField).at(1), 'Guru12345');
   await t.tap(find.text('Masuk').last);

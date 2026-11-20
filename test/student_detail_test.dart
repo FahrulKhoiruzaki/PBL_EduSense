@@ -109,7 +109,7 @@ Future<FakeGuruRepository> _openStudent(
   ));
   await t.pumpAndSettle();
   await t.tap(find.text('Wali Kelas'));
-  await t.pump();
+  await t.pumpAndSettle();
   await t.enterText(find.byType(TextField).at(0), 'bu.rina@contoh.id');
   await t.enterText(find.byType(TextField).at(1), 'Guru12345');
   await t.tap(find.text('Masuk').last);
