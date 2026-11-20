@@ -1,4 +1,4 @@
-import 'package:edu_sense/features/guru/screens/login_screen.dart';
+import 'package:edu_sense/features/guru/screens/native_role_selection_screen.dart';
 import 'package:edu_sense/main.dart';
 import 'package:edu_sense/models/app_models.dart';
 import 'package:edu_sense/repositories/auth_repository.dart';
@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/test_env.dart';
 
 /// Tanpa sesi tersimpan: `restore()` mengembalikan null, sehingga aplikasi
-/// tidak pernah memanggil backend dan langsung menampilkan layar login.
+/// menampilkan layar pemilihan role native.
 class _SignedOutAuthRepository implements AuthRepository {
   var restoreCalls = 0;
 
@@ -38,7 +38,7 @@ class _SignedOutAuthRepository implements AuthRepository {
 void main() {
   final errors = captureErrors();
 
-  testWidgets('app boots to the login screen when no session is stored', (
+  testWidgets('app boots to the native role selector when no session is stored', (
     tester,
   ) async {
     await prepareFonts();
@@ -53,7 +53,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(auth.restoreCalls, 1);
-    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.byType(NativeRoleSelectionScreen), findsOneWidget);
+    expect(find.text('Guru Mapel'), findsOneWidget);
+    expect(find.text('Wali Kelas'), findsOneWidget);
+    expect(find.text('Admin'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(errors, isEmpty);
   });
